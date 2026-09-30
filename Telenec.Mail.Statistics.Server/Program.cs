@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Security;
+using Telenec.Mail.Statistics.Server.Services;
 using Telenec.Mail.Statistics.Server.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +32,9 @@ builder.Services.AddDbContext<StatisticsDbContext>(options =>
 
 builder.Services.AddSingleton<IInstallationKeyService, HmacInstallationKeyService>();
 builder.Services.AddSingleton<IUsageRequestValidator, UsageRequestValidator>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+
+builder.Services.AddScoped<IUsageStatisticsService, UsageStatisticsService>();
 
 var app = builder.Build();
 

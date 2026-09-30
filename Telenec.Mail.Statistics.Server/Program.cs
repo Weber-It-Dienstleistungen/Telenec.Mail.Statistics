@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
+using Telenec.Mail.Statistics.Server.Endpoints;
 using Telenec.Mail.Statistics.Server.Security;
 using Telenec.Mail.Statistics.Server.Services;
 using Telenec.Mail.Statistics.Server.Validation;
@@ -39,5 +40,7 @@ builder.Services.AddScoped<IUsageStatisticsService, UsageStatisticsService>();
 var app = builder.Build();
 
 app.MapGet("/", () => "Telenec Mail Statistics Server");
+
+app.MapUsageEndpoints();
 
 app.Run();

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Security;
+using Telenec.Mail.Statistics.Server.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,7 @@ builder.Services.AddDbContext<StatisticsDbContext>(options =>
     options.UseSqlite($"Data Source={databasePath}"));
 
 builder.Services.AddSingleton<IInstallationKeyService, HmacInstallationKeyService>();
+builder.Services.AddSingleton<IUsageRequestValidator, UsageRequestValidator>();
 
 var app = builder.Build();
 

@@ -5,10 +5,25 @@ namespace Telenec.Mail.Statistics.Admin;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(MainWindowViewModel viewModel)
+    private readonly MainWindowViewModel _viewModel;
+
+    public MainWindow(
+        MainWindowViewModel viewModel)
     {
         InitializeComponent();
 
-        DataContext = viewModel;
+        _viewModel = viewModel;
+        DataContext = _viewModel;
+
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(
+        object sender,
+        RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+
+        await _viewModel.LoadAsync();
     }
 }

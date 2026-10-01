@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Telenec.Mail.Statistics.Admin.Services;
 using Telenec.Mail.Statistics.Admin.ViewModels;
 
 namespace Telenec.Mail.Statistics.Admin;
@@ -15,6 +16,13 @@ public partial class App : Application
             .CreateDefaultBuilder()
             .ConfigureServices(services =>
             {
+                services.AddHttpClient<IAdminStatisticsClient, AdminStatisticsClient>(
+                    httpClient =>
+                    {
+                        httpClient.Timeout =
+                            TimeSpan.FromSeconds(10);
+                    });
+
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })

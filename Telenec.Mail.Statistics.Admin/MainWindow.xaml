@@ -2,15 +2,240 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{Binding WindowTitle}"
-        Width="900"
-        Height="600"
-        WindowStartupLocation="CenterScreen">
+        Width="1100"
+        Height="700"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        Background="#F4F6F8">
 
-    <Grid>
-        <TextBlock Text="{Binding StatusText}"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   FontSize="24" />
+    <Window.Resources>
+
+        <SolidColorBrush x:Key="PrimaryBrush"
+                         Color="#0069B4" />
+
+        <SolidColorBrush x:Key="CardBackgroundBrush"
+                         Color="#FFFFFF" />
+
+        <SolidColorBrush x:Key="PrimaryTextBrush"
+                         Color="#1E293B" />
+
+        <SolidColorBrush x:Key="SecondaryTextBrush"
+                         Color="#64748B" />
+
+        <Style x:Key="DashboardCard"
+               TargetType="Border">
+            <Setter Property="Background"
+                    Value="{StaticResource CardBackgroundBrush}" />
+            <Setter Property="CornerRadius"
+                    Value="12" />
+            <Setter Property="Padding"
+                    Value="28" />
+            <Setter Property="Margin"
+                    Value="8" />
+            <Setter Property="BorderBrush"
+                    Value="#E2E8F0" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+        </Style>
+
+        <Style x:Key="MetricValue"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="42" />
+            <Setter Property="FontWeight"
+                    Value="SemiBold" />
+            <Setter Property="Foreground"
+                    Value="{StaticResource PrimaryTextBrush}" />
+            <Setter Property="HorizontalAlignment"
+                    Value="Center" />
+        </Style>
+
+        <Style x:Key="MetricLabel"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="16" />
+            <Setter Property="Foreground"
+                    Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="HorizontalAlignment"
+                    Value="Center" />
+            <Setter Property="TextAlignment"
+                    Value="Center" />
+            <Setter Property="Margin"
+                    Value="0,10,0,0" />
+        </Style>
+
+    </Window.Resources>
+
+    <Grid Margin="32">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+
+                <TextBlock Text="{Binding DashboardTitle}"
+                           FontSize="30"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource PrimaryTextBrush}" />
+
+                <TextBlock Text="{Binding DashboardSubtitle}"
+                           Margin="0,6,0,0"
+                           FontSize="15"
+                           Foreground="{StaticResource SecondaryTextBrush}" />
+
+            </StackPanel>
+
+            <Border Grid.Column="1"
+                    Background="{StaticResource PrimaryBrush}"
+                    CornerRadius="8"
+                    Padding="14,8"
+                    VerticalAlignment="Center">
+
+                <TextBlock Text="Telenec Mail"
+                           Foreground="White"
+                           FontWeight="SemiBold"
+                           FontSize="15" />
+
+            </Border>
+
+        </Grid>
+
+        <Grid Grid.Row="2">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.25*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Column="0"
+                    Grid.Row="0"
+                    Grid.RowSpan="2"
+                    Style="{StaticResource DashboardCard}">
+
+                <StackPanel VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding TotalInstallations}"
+                               FontSize="72"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource PrimaryBrush}"
+                               HorizontalAlignment="Center" />
+
+                    <TextBlock Text="Installationen insgesamt"
+                               FontSize="19"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource PrimaryTextBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,14,0,0" />
+
+                    <TextBlock Text="Installationen mit erteilter Einwilligung"
+                               FontSize="13"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Margin="0,8,0,0" />
+
+                </StackPanel>
+
+            </Border>
+
+            <Border Grid.Column="1"
+                    Grid.Row="0"
+                    Style="{StaticResource DashboardCard}">
+
+                <StackPanel VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding ActiveToday}"
+                               Style="{StaticResource MetricValue}" />
+
+                    <TextBlock Text="Heute aktiv"
+                               Style="{StaticResource MetricLabel}" />
+
+                </StackPanel>
+
+            </Border>
+
+            <Border Grid.Column="2"
+                    Grid.Row="0"
+                    Style="{StaticResource DashboardCard}">
+
+                <StackPanel VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding ActiveLast7Days}"
+                               Style="{StaticResource MetricValue}" />
+
+                    <TextBlock Text="Aktiv in den letzten 7 Tagen"
+                               Style="{StaticResource MetricLabel}" />
+
+                </StackPanel>
+
+            </Border>
+
+            <Border Grid.Column="1"
+                    Grid.Row="1"
+                    Style="{StaticResource DashboardCard}">
+
+                <StackPanel VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding ActiveLast30Days}"
+                               Style="{StaticResource MetricValue}" />
+
+                    <TextBlock Text="Aktiv in den letzten 30 Tagen"
+                               Style="{StaticResource MetricLabel}" />
+
+                </StackPanel>
+
+            </Border>
+
+            <Border Grid.Column="2"
+                    Grid.Row="1"
+                    Style="{StaticResource DashboardCard}">
+
+                <StackPanel VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding InactiveOver30Days}"
+                               Style="{StaticResource MetricValue}" />
+
+                    <TextBlock Text="Länger als 30 Tage inaktiv"
+                               Style="{StaticResource MetricLabel}" />
+
+                </StackPanel>
+
+            </Border>
+
+        </Grid>
+
+        <Border Grid.Row="4"
+                Background="#FFF7ED"
+                BorderBrush="#FED7AA"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,8">
+
+            <TextBlock Text="{Binding StatusText}"
+                       FontSize="13"
+                       Foreground="#9A3412" />
+
+        </Border>
+
     </Grid>
 
 </Window>

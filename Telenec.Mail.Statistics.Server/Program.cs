@@ -39,6 +39,8 @@ builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 builder.Services.AddScoped<IUsageStatisticsService, UsageStatisticsService>();
 
+builder.Services.AddHostedService<ServerInitializationHostedService>();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

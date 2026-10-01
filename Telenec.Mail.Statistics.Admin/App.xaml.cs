@@ -43,21 +43,76 @@ public partial class App : Application
                             TimeSpan.FromSeconds(10);
                     });
 
+                services.AddHttpClient<
+                    IAdminConnectionSetupService,
+                    AdminConnectionSetupService>(
+                    httpClient =>
+                    {
+                        httpClient.Timeout =
+                            TimeSpan.FromSeconds(10);
+                    });
+
+                services.AddTransient<SetupWindowViewModel>();
+                services.AddTransient<SetupWindow>();
+
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })
             .Build();
     }
 
-    protected override void OnStartup(
+    protected override async void OnStartup(
         StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        _host.Start();
+        ShutdownMode =
+            ShutdownMode.OnExplicitShutdown;
+
+        await _host.StartAsync();
+
+        var baseUrlStore =
+            _host.Services
+                .GetRequiredService<IAdminApiBaseUrlStore>();
+
+        var apiKeyStore =
+            _host.Services
+                .GetRequiredService<IAdminApiKeyStore>();
+
+        var storedBaseUrl =
+            await baseUrlStore.ReadAsync();
+
+        var storedApiKey =
+            await apiKeyStore.ReadAsync();
+
+        var isConfigured =
+            !string.IsNullOrWhiteSpace(storedBaseUrl)
+            && !string.IsNullOrWhiteSpace(storedApiKey);
+
+        if (!isConfigured)
+        {
+            var setupWindow =
+                _host.Services
+                    .GetRequiredService<SetupWindow>();
+
+            var setupResult =
+                setupWindow.ShowDialog();
+
+            if (setupResult != true)
+            {
+                Shutdown();
+                return;
+            }
+        }
 
         var mainWindow =
-            _host.Services.GetRequiredService<MainWindow>();
+            _host.Services
+                .GetRequiredService<MainWindow>();
+
+        MainWindow = mainWindow;
+
+        ShutdownMode =
+            ShutdownMode.OnMainWindowClose;
 
         mainWindow.Show();
     }

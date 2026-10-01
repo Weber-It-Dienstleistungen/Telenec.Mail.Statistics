@@ -1,13 +1,46 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+﻿using System.Windows;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Telenec.Mail.Statistics.Admin.ViewModels;
 
 namespace Telenec.Mail.Statistics.Admin;
 
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
-}
+    private readonly IHost _host;
 
+    public App()
+    {
+        _host = Host
+            .CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<MainWindowViewModel>();
+                services.AddSingleton<MainWindow>();
+            })
+            .Build();
+    }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        _host.Start();
+
+        var mainWindow =
+            _host.Services.GetRequiredService<MainWindow>();
+
+        mainWindow.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _host.StopAsync()
+            .GetAwaiter()
+            .GetResult();
+
+        _host.Dispose();
+
+        base.OnExit(e);
+    }
+}

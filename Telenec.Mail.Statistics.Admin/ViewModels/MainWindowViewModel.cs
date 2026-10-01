@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Telenec.Mail.Statistics.Admin.ViewModels
+namespace Telenec.Mail.Statistics.Admin.ViewModels;
+
+public sealed partial class MainWindowViewModel : ObservableObject
 {
-    internal class MainWindowViewModel
-    {
-    }
+    public string WindowTitle => "Telenec Mail Statistik";
+
+    public string StatusText => "Admin-Oberfläche bereit";
 }

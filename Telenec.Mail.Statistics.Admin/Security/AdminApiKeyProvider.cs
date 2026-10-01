@@ -48,11 +48,29 @@ public sealed class AdminApiKeyProvider : IAdminApiKeyProvider
             configuredApiKey,
             $"Der Admin-API-Schlüssel '{ApiKeyConfigurationKey}'");
 
-        await _apiKeyStore.SaveAsync(
-            configuredApiKey,
-            cancellationToken);
-
         return configuredApiKey;
+    }
+
+    public async Task ConfirmApiKeyAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateApiKey(
+            apiKey,
+            "Der erfolgreich verwendete Admin-API-Schlüssel");
+
+        var storedApiKey =
+            await _apiKeyStore.ReadAsync(
+                cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(storedApiKey))
+        {
+            return;
+        }
+
+        await _apiKeyStore.SaveAsync(
+            apiKey,
+            cancellationToken);
     }
 
     private static void ValidateApiKey(

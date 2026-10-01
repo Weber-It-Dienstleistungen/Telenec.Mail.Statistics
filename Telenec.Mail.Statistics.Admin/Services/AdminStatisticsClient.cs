@@ -116,8 +116,16 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
                 .ReadFromJsonAsync<DashboardStatisticsResponse>(
                     cancellationToken: cancellationToken);
 
-        return statistics
-            ?? throw new InvalidDataException(
+        if (statistics is null)
+        {
+            throw new InvalidDataException(
                 "Der Statistikserver hat keine gültigen Dashboard-Daten geliefert.");
+        }
+
+        await _apiKeyProvider.ConfirmApiKeyAsync(
+            apiKey,
+            cancellationToken);
+
+        return statistics;
     }
 }

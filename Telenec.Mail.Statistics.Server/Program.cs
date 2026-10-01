@@ -1,3 +1,5 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Endpoints;
@@ -37,7 +39,33 @@ builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 builder.Services.AddScoped<IUsageStatisticsService, UsageStatisticsService>();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(
+        UsageEndpoints.RateLimitPolicyName,
+        httpContext =>
+        {
+            var partitionKey =
+                httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown";
+
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                });
+        });
+});
+
 var app = builder.Build();
+
+app.UseRateLimiter();
 
 app.MapGet("/", () => "Telenec Mail Statistics Server");
 

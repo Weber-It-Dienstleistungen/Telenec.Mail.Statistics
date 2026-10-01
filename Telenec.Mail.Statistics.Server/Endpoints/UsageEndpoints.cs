@@ -7,12 +7,16 @@ namespace Telenec.Mail.Statistics.Server.Endpoints;
 
 public static class UsageEndpoints
 {
+    public const string RateLimitPolicyName = "UsageApi";
+
     private const long MaximumRequestBodySize = 2 * 1024;
 
     public static IEndpointRouteBuilder MapUsageEndpoints(
         this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/v1/usage");
+        var group = endpoints
+            .MapGroup("/api/v1/usage")
+            .RequireRateLimiting(RateLimitPolicyName);
 
         group.MapPost(
                 "/heartbeat",

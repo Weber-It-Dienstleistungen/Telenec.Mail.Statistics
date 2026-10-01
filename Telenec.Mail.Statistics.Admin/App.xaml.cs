@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Telenec.Mail.Statistics.Admin.Configuration;
 using Telenec.Mail.Statistics.Admin.Security;
 using Telenec.Mail.Statistics.Admin.Services;
 using Telenec.Mail.Statistics.Admin.ViewModels;
@@ -24,6 +25,14 @@ public partial class App : Application
                 services.AddSingleton<
                     IAdminApiKeyProvider,
                     AdminApiKeyProvider>();
+
+                services.AddSingleton<
+                    IAdminApiBaseUrlStore,
+                    JsonAdminApiBaseUrlStore>();
+
+                services.AddSingleton<
+                    IAdminApiBaseUrlProvider,
+                    AdminApiBaseUrlProvider>();
 
                 services.AddHttpClient<
                     IAdminStatisticsClient,

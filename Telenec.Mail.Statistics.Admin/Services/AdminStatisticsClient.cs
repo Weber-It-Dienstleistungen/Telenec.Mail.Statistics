@@ -4,24 +4,29 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
 using Telenec.Mail.Statistics.Admin.Models;
+using Telenec.Mail.Statistics.Admin.Security;
 
 namespace Telenec.Mail.Statistics.Admin.Services;
 
 public sealed class AdminStatisticsClient : IAdminStatisticsClient
 {
-    private const string BaseUrlConfigurationKey = "AdminApi:BaseUrl";
-    private const string ApiKeyConfigurationKey = "AdminApi:ApiKey";
-    private const string AdminApiKeyHeaderName = "X-Admin-Key";
+    private const string BaseUrlConfigurationKey =
+        "AdminApi:BaseUrl";
+
+    private const string AdminApiKeyHeaderName =
+        "X-Admin-Key";
 
     private readonly HttpClient _httpClient;
+    private readonly IAdminApiKeyProvider _apiKeyProvider;
     private readonly Uri _dashboardUri;
-    private readonly string _apiKey;
 
     public AdminStatisticsClient(
         HttpClient httpClient,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IAdminApiKeyProvider apiKeyProvider)
     {
         _httpClient = httpClient;
+        _apiKeyProvider = apiKeyProvider;
 
         var configuredBaseUrl =
             configuration[BaseUrlConfigurationKey];
@@ -62,7 +67,9 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
         }
 
         var normalizedBaseUri =
-            baseUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
+            baseUri.AbsoluteUri.EndsWith(
+                "/",
+                StringComparison.Ordinal)
                 ? baseUri
                 : new Uri(
                     baseUri.AbsoluteUri + "/",
@@ -72,42 +79,15 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
             new Uri(
                 normalizedBaseUri,
                 "api/v1/admin/dashboard");
-
-        var configuredApiKey =
-            configuration[ApiKeyConfigurationKey];
-
-        if (string.IsNullOrWhiteSpace(configuredApiKey))
-        {
-            throw new InvalidOperationException(
-                $"Der Admin-API-Schlüssel '{ApiKeyConfigurationKey}' wurde nicht konfiguriert.");
-        }
-
-        byte[] decodedApiKey;
-
-        try
-        {
-            decodedApiKey =
-                Convert.FromBase64String(configuredApiKey);
-        }
-        catch (FormatException exception)
-        {
-            throw new InvalidOperationException(
-                $"Der Admin-API-Schlüssel '{ApiKeyConfigurationKey}' ist kein gültiger Base64-Wert.",
-                exception);
-        }
-
-        if (decodedApiKey.Length < 32)
-        {
-            throw new InvalidOperationException(
-                $"Der Admin-API-Schlüssel '{ApiKeyConfigurationKey}' muss mindestens 32 Bytes lang sein.");
-        }
-
-        _apiKey = configuredApiKey;
     }
 
     public async Task<DashboardStatisticsResponse> GetDashboardStatisticsAsync(
         CancellationToken cancellationToken = default)
     {
+        var apiKey =
+            await _apiKeyProvider.GetApiKeyAsync(
+                cancellationToken);
+
         using var request =
             new HttpRequestMessage(
                 HttpMethod.Get,
@@ -115,7 +95,7 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
 
         request.Headers.TryAddWithoutValidation(
             AdminApiKeyHeaderName,
-            _apiKey);
+            apiKey);
 
         using var response =
             await _httpClient.SendAsync(

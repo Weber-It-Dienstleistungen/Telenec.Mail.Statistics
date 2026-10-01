@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Telenec.Mail.Statistics.Admin.Security;
 using Telenec.Mail.Statistics.Admin.Services;
 using Telenec.Mail.Statistics.Admin.ViewModels;
 
@@ -16,7 +17,17 @@ public partial class App : Application
             .CreateDefaultBuilder()
             .ConfigureServices(services =>
             {
-                services.AddHttpClient<IAdminStatisticsClient, AdminStatisticsClient>(
+                services.AddSingleton<
+                    IAdminApiKeyStore,
+                    WindowsAdminApiKeyStore>();
+
+                services.AddSingleton<
+                    IAdminApiKeyProvider,
+                    AdminApiKeyProvider>();
+
+                services.AddHttpClient<
+                    IAdminStatisticsClient,
+                    AdminStatisticsClient>(
                     httpClient =>
                     {
                         httpClient.Timeout =
@@ -29,7 +40,8 @@ public partial class App : Application
             .Build();
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(
+        StartupEventArgs e)
     {
         base.OnStartup(e);
 
@@ -41,7 +53,8 @@ public partial class App : Application
         mainWindow.Show();
     }
 
-    protected override void OnExit(ExitEventArgs e)
+    protected override void OnExit(
+        ExitEventArgs e)
     {
         _host.StopAsync()
             .GetAwaiter()

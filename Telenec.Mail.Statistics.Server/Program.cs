@@ -34,6 +34,7 @@ builder.Services.AddDbContext<StatisticsDbContext>(options =>
     options.UseSqlite($"Data Source={databasePath}"));
 
 builder.Services.AddSingleton<IInstallationKeyService, HmacInstallationKeyService>();
+builder.Services.AddSingleton<IAdminApiKeyValidator, AdminApiKeyValidator>();
 builder.Services.AddSingleton<IUsageRequestValidator, UsageRequestValidator>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
@@ -73,5 +74,6 @@ app.UseRateLimiter();
 app.MapGet("/", () => "Telenec Mail Statistics Server");
 
 app.MapUsageEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();

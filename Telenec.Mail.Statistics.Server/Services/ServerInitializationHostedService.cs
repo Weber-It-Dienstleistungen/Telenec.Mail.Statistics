@@ -8,21 +8,25 @@ public sealed class ServerInitializationHostedService : IHostedService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IInstallationKeyService _installationKeyService;
+    private readonly IAdminApiKeyValidator _adminApiKeyValidator;
     private readonly ILogger<ServerInitializationHostedService> _logger;
 
     public ServerInitializationHostedService(
         IServiceScopeFactory scopeFactory,
         IInstallationKeyService installationKeyService,
+        IAdminApiKeyValidator adminApiKeyValidator,
         ILogger<ServerInitializationHostedService> logger)
     {
         _scopeFactory = scopeFactory;
         _installationKeyService = installationKeyService;
+        _adminApiKeyValidator = adminApiKeyValidator;
         _logger = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _ = _installationKeyService;
+        _ = _adminApiKeyValidator;
 
         _logger.LogInformation(
             "Initialisiere Statistikdatenbank und wende ausstehende Migrationen an.");

@@ -38,6 +38,7 @@ builder.Services.AddSingleton<IUsageRequestValidator, UsageRequestValidator>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 
 builder.Services.AddScoped<IUsageStatisticsService, UsageStatisticsService>();
+builder.Services.AddScoped<IStatisticsQueryService, StatisticsQueryService>();
 
 builder.Services.AddHostedService<ServerInitializationHostedService>();
 

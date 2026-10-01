@@ -65,6 +65,72 @@
                     Value="0,10,0,0" />
         </Style>
 
+        <Style x:Key="StatusBorderStyle"
+               TargetType="Border">
+            <Setter Property="Background"
+                    Value="#EFF6FF" />
+            <Setter Property="BorderBrush"
+                    Value="#BFDBFE" />
+
+            <Style.Triggers>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Success">
+                    <Setter Property="Background"
+                            Value="#F0FDF4" />
+                    <Setter Property="BorderBrush"
+                            Value="#BBF7D0" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Warning">
+                    <Setter Property="Background"
+                            Value="#FFF7ED" />
+                    <Setter Property="BorderBrush"
+                            Value="#FED7AA" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Error">
+                    <Setter Property="Background"
+                            Value="#FEF2F2" />
+                    <Setter Property="BorderBrush"
+                            Value="#FECACA" />
+                </DataTrigger>
+
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StatusTextStyle"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="13" />
+            <Setter Property="Foreground"
+                    Value="#1D4ED8" />
+
+            <Style.Triggers>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Success">
+                    <Setter Property="Foreground"
+                            Value="#166534" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Warning">
+                    <Setter Property="Foreground"
+                            Value="#9A3412" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding StatusKind}"
+                             Value="Error">
+                    <Setter Property="Foreground"
+                            Value="#991B1B" />
+                </DataTrigger>
+
+            </Style.Triggers>
+        </Style>
+
     </Window.Resources>
 
     <Grid Margin="32">
@@ -98,18 +164,29 @@
 
             </StackPanel>
 
-            <Border Grid.Column="1"
-                    Background="{StaticResource PrimaryBrush}"
-                    CornerRadius="8"
-                    Padding="14,8"
-                    VerticalAlignment="Center">
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
 
-                <TextBlock Text="Telenec Mail"
-                           Foreground="White"
-                           FontWeight="SemiBold"
-                           FontSize="15" />
+                <Button Content="Aktualisieren"
+                        Command="{Binding RefreshCommand}"
+                        Padding="16,8"
+                        Margin="0,0,12,0"
+                        FontSize="14"
+                        Cursor="Hand" />
 
-            </Border>
+                <Border Background="{StaticResource PrimaryBrush}"
+                        CornerRadius="8"
+                        Padding="14,8">
+
+                    <TextBlock Text="Telenec Mail"
+                               Foreground="White"
+                               FontWeight="SemiBold"
+                               FontSize="15" />
+
+                </Border>
+
+            </StackPanel>
 
         </Grid>
 
@@ -224,15 +301,13 @@
         </Grid>
 
         <Border Grid.Row="4"
-                Background="#FFF7ED"
-                BorderBrush="#FED7AA"
+                Style="{StaticResource StatusBorderStyle}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="12,8">
 
             <TextBlock Text="{Binding StatusText}"
-                       FontSize="13"
-                       Foreground="#9A3412" />
+                       Style="{StaticResource StatusTextStyle}" />
 
         </Border>
 

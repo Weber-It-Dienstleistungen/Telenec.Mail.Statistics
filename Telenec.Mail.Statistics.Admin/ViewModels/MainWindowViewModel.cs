@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Telenec.Mail.Statistics.Admin.Services;
@@ -15,18 +16,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _statisticsClient = statisticsClient;
     }
 
-    public string WindowTitle => "Telenec Mail Statistik";
+    public string WindowTitle =>
+        "Telenec Mail Statistik";
 
-    public string DashboardTitle => "Nutzungsstatistik";
+    public string DashboardTitle =>
+        "Nutzungsstatistik";
 
     public string DashboardSubtitle =>
         "Übersicht der aktiven Telenec-Mail-Installationen";
 
-    [ObservableProperty]
-    private string statusText = "Daten werden geladen …";
+    public string ApplicationVersionText =>
+        $"Telenec Mail · {GetApplicationVersion()}";
 
     [ObservableProperty]
-    private string statusKind = "Loading";
+    private string statusText =
+        "Daten werden geladen …";
+
+    [ObservableProperty]
+    private string statusKind =
+        "Loading";
 
     [ObservableProperty]
     private bool isLoading;
@@ -49,7 +57,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public async Task LoadAsync(
         CancellationToken cancellationToken = default)
     {
-        await RefreshAsync(cancellationToken);
+        await RefreshAsync(
+            cancellationToken);
     }
 
     [RelayCommand(AllowConcurrentExecutions = false)]
@@ -63,8 +72,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         try
         {
             var statistics =
-                await _statisticsClient.GetDashboardStatisticsAsync(
-                    cancellationToken);
+                await _statisticsClient
+                    .GetDashboardStatisticsAsync(
+                        cancellationToken);
 
             TotalInstallations =
                 statistics.TotalInstallations;
@@ -113,5 +123,40 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    private static string GetApplicationVersion()
+    {
+        var assembly =
+            typeof(MainWindowViewModel).Assembly;
+
+        var informationalVersion =
+            assembly
+                .GetCustomAttribute<
+                    AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(
+                informationalVersion))
+        {
+            var metadataSeparatorIndex =
+                informationalVersion.IndexOf(
+                    '+');
+
+            if (metadataSeparatorIndex >= 0)
+            {
+                informationalVersion =
+                    informationalVersion[
+                        ..metadataSeparatorIndex];
+            }
+
+            return informationalVersion;
+        }
+
+        return assembly
+                   .GetName()
+                   .Version?
+                   .ToString()
+               ?? "unbekannt";
     }
 }

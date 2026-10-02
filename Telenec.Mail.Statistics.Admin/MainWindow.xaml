@@ -179,7 +179,7 @@
                         CornerRadius="8"
                         Padding="14,8">
 
-                    <TextBlock Text="Telenec Mail"
+                    <TextBlock Text="{Binding ApplicationVersionText}"
                                Foreground="White"
                                FontWeight="SemiBold"
                                FontSize="15" />

@@ -9,7 +9,7 @@
 
 		<StartupObject>Telenec.Mail.Statistics.Admin.Program</StartupObject>
 
-		<Version>0.1.0-test.1</Version>
+		<Version>0.1.0-test.2</Version>
 	</PropertyGroup>
 
 	<ItemGroup>

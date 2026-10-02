@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Telenec.Mail.Statistics.Admin.Configuration;
 using Telenec.Mail.Statistics.Admin.Security;
 using Telenec.Mail.Statistics.Admin.Services;
+using Telenec.Mail.Statistics.Admin.Services.Updates;
 using Telenec.Mail.Statistics.Admin.ViewModels;
 
 namespace Telenec.Mail.Statistics.Admin;
@@ -33,6 +34,10 @@ public partial class App : Application
                 services.AddSingleton<
                     IAdminApiBaseUrlProvider,
                     AdminApiBaseUrlProvider>();
+
+                services.AddSingleton<
+                    IApplicationUpdateService,
+                    VelopackApplicationUpdateService>();
 
                 services.AddHttpClient<
                     IAdminStatisticsClient,

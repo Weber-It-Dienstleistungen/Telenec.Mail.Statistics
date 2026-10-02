@@ -8,6 +8,7 @@
 		<UseWPF>true</UseWPF>
 
 		<StartupObject>Telenec.Mail.Statistics.Admin.Program</StartupObject>
+		<ApplicationIcon>Assets\TelenecMailAdmin.ico</ApplicationIcon>
 
 		<Version>0.1.0-test.3</Version>
 	</PropertyGroup>
@@ -17,6 +18,12 @@
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
 		<PackageReference Include="Velopack" Version="1.2.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Assets\TelenecMailAdminPanelLogo.png" />
+		<Resource Include="Assets\TelenecMailAdminIcon.png" />
+		<Resource Include="Assets\TelenecMailAdmin.ico" />
 	</ItemGroup>
 
 </Project>

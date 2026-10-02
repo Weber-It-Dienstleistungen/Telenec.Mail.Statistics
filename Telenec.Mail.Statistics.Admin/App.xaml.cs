@@ -74,6 +74,39 @@ public partial class App : Application
         ShutdownMode =
             ShutdownMode.OnExplicitShutdown;
 
+        /*
+         * Eine installierte Velopack-Version prüft vor dem
+         * normalen Programmstart, ob auf GitHub eine neuere
+         * Version vorhanden ist.
+         *
+         * Bei Visual-Studio-, dotnet-run- und normalen
+         * Publish-Starts außerhalb einer Velopack-Installation
+         * kehrt der Dienst sofort zurück.
+         *
+         * Updatefehler dürfen den Start der Statistik-Anwendung
+         * niemals verhindern.
+         */
+        var updateService =
+            _host.Services
+                .GetRequiredService<
+                    IApplicationUpdateService>();
+
+        var updateRestartInitiated =
+            await updateService
+                .TryApplyAvailableUpdateAsync();
+
+        /*
+         * ApplyUpdatesAndRestart beendet die Anwendung
+         * normalerweise bereits selbst.
+         *
+         * Der Rücksprung verhindert defensiv, dass parallel
+         * noch der normale Startup-Ablauf beginnt.
+         */
+        if (updateRestartInitiated)
+        {
+            return;
+        }
+
         await _host.StartAsync();
 
         var baseUrlStore =

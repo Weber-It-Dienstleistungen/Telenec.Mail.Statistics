@@ -28,6 +28,76 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string ApplicationVersionText =>
         $"Telenec Mail · {GetApplicationVersion()}";
 
+    public double ActiveTodayPercentage =>
+        GetPercentage(
+            ActiveToday,
+            TotalInstallations);
+
+    public double ActiveLast7DaysPercentage =>
+        GetPercentage(
+            ActiveLast7Days,
+            TotalInstallations);
+
+    public double ActiveLast30DaysPercentage =>
+        GetPercentage(
+            ActiveLast30Days,
+            TotalInstallations);
+
+    public double InactiveOver30DaysPercentage =>
+        GetPercentage(
+            InactiveOver30Days,
+            TotalInstallations);
+
+    public int ActiveDays1To7 =>
+        Math.Max(
+            0,
+            ActiveLast7Days - ActiveToday);
+
+    public int ActiveDays8To30 =>
+        Math.Max(
+            0,
+            ActiveLast30Days - ActiveLast7Days);
+
+    public double ActiveDays1To7Percentage =>
+        GetPercentage(
+            ActiveDays1To7,
+            TotalInstallations);
+
+    public double ActiveDays8To30Percentage =>
+        GetPercentage(
+            ActiveDays8To30,
+            TotalInstallations);
+
+    public string ActiveTodayChartText =>
+        FormatChartValue(
+            ActiveToday,
+            ActiveTodayPercentage);
+
+    public string ActiveLast7DaysChartText =>
+        FormatChartValue(
+            ActiveLast7Days,
+            ActiveLast7DaysPercentage);
+
+    public string ActiveLast30DaysChartText =>
+        FormatChartValue(
+            ActiveLast30Days,
+            ActiveLast30DaysPercentage);
+
+    public string InactiveOver30DaysChartText =>
+        FormatChartValue(
+            InactiveOver30Days,
+            InactiveOver30DaysPercentage);
+
+    public string ActiveDays1To7ChartText =>
+        FormatChartValue(
+            ActiveDays1To7,
+            ActiveDays1To7Percentage);
+
+    public string ActiveDays8To30ChartText =>
+        FormatChartValue(
+            ActiveDays8To30,
+            ActiveDays8To30Percentage);
+
     [ObservableProperty]
     private string statusText =
         "Daten werden geladen …";
@@ -91,6 +161,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             InactiveOver30Days =
                 statistics.InactiveOver30Days;
 
+            RaiseChartPropertiesChanged();
+
             StatusKind = "Success";
             StatusText =
                 $"Daten erfolgreich geladen – {DateTime.Now:dd.MM.yyyy HH:mm:ss}";
@@ -123,6 +195,73 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    private void RaiseChartPropertiesChanged()
+    {
+        OnPropertyChanged(
+            nameof(ActiveTodayPercentage));
+
+        OnPropertyChanged(
+            nameof(ActiveLast7DaysPercentage));
+
+        OnPropertyChanged(
+            nameof(ActiveLast30DaysPercentage));
+
+        OnPropertyChanged(
+            nameof(InactiveOver30DaysPercentage));
+
+        OnPropertyChanged(
+            nameof(ActiveDays1To7));
+
+        OnPropertyChanged(
+            nameof(ActiveDays8To30));
+
+        OnPropertyChanged(
+            nameof(ActiveDays1To7Percentage));
+
+        OnPropertyChanged(
+            nameof(ActiveDays8To30Percentage));
+
+        OnPropertyChanged(
+            nameof(ActiveTodayChartText));
+
+        OnPropertyChanged(
+            nameof(ActiveLast7DaysChartText));
+
+        OnPropertyChanged(
+            nameof(ActiveLast30DaysChartText));
+
+        OnPropertyChanged(
+            nameof(InactiveOver30DaysChartText));
+
+        OnPropertyChanged(
+            nameof(ActiveDays1To7ChartText));
+
+        OnPropertyChanged(
+            nameof(ActiveDays8To30ChartText));
+    }
+
+    private static double GetPercentage(
+        int value,
+        int total)
+    {
+        if (total <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp(
+            value * 100d / total,
+            0,
+            100);
+    }
+
+    private static string FormatChartValue(
+        int value,
+        double percentage)
+    {
+        return $"{value} · {percentage:0.#} %";
     }
 
     private static string GetApplicationVersion()

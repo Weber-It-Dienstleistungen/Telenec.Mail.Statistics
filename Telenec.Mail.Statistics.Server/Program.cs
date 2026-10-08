@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Endpoints;
+using Telenec.Mail.Statistics.Server.Options;
 using Telenec.Mail.Statistics.Server.Security;
 using Telenec.Mail.Statistics.Server.Services;
 using Telenec.Mail.Statistics.Server.Validation;
@@ -70,6 +71,17 @@ builder.Services.Configure<ForwardedHeadersOptions>(
         options.ForwardLimit = 2;
     });
 
+builder.Services
+    .AddOptions<StatisticsRetentionOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            StatisticsRetentionOptions.SectionName))
+    .Validate(
+        options =>
+            options.RetentionDays is >= 1 and <= 3650,
+        "Statistics:RetentionDays muss zwischen 1 und 3650 Tagen liegen.")
+    .ValidateOnStart();
+
 builder.Services.AddDbContext<StatisticsDbContext>(
     options =>
         options.UseSqlite(
@@ -98,8 +110,18 @@ builder.Services.AddScoped<
     IStatisticsQueryService,
     StatisticsQueryService>();
 
+/*
+ * Die Datenbank wird zuerst initialisiert und migriert.
+ *
+ * Erst danach startet die automatische Bereinigung.
+ * Hosted Services werden vom Host in
+ * Registrierungsreihenfolge gestartet.
+ */
 builder.Services.AddHostedService<
     ServerInitializationHostedService>();
+
+builder.Services.AddHostedService<
+    StatisticsRetentionHostedService>();
 
 builder.Services.AddRateLimiter(
     options =>

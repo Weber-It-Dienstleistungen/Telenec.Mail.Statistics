@@ -1,3 +1,4 @@
+
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Endpoints;
 using Telenec.Mail.Statistics.Server.Options;
+using Telenec.Mail.Statistics.Server.Reputation;
 using Telenec.Mail.Statistics.Server.Security;
 using Telenec.Mail.Statistics.Server.Services;
 using Telenec.Mail.Statistics.Server.Validation;
@@ -111,9 +113,29 @@ builder.Services.AddScoped<
     StatisticsQueryService>();
 
 /*
+ * Blacklist-Monitoring.
+ *
+ * Der Dienst wird als Singleton registriert,
+ * damit Hintergrundprüfung und Admin-API
+ * denselben Monitoring-Zustand verwenden.
+ *
+ * Der Hosted Service erhält ausdrücklich
+ * die bereits registrierte Singleton-Instanz.
+ *
+ * Dadurch entstehen nicht versehentlich
+ * zwei getrennte Monitoring-Dienste.
+ *
+ * Die Prüfungen laufen unabhängig von
+ * Dashboard-Aufrufen im Hintergrund.
+ */
+builder.Services.AddSingleton<
+    BlacklistMonitoringService>();
+
+/*
  * Die Datenbank wird zuerst initialisiert und migriert.
  *
- * Erst danach startet die automatische Bereinigung.
+ * Erst danach starten die Hintergrunddienste.
+ *
  * Hosted Services werden vom Host in
  * Registrierungsreihenfolge gestartet.
  */
@@ -122,6 +144,18 @@ builder.Services.AddHostedService<
 
 builder.Services.AddHostedService<
     StatisticsRetentionHostedService>();
+
+/*
+ * Automatische Blacklist-Überwachung.
+ *
+ * Der Hosted Service verwendet exakt dieselbe
+ * Instanz, die später über die Admin-API
+ * abgefragt werden kann.
+ */
+builder.Services.AddHostedService(
+    serviceProvider =>
+        serviceProvider.GetRequiredService<
+            BlacklistMonitoringService>());
 
 builder.Services.AddRateLimiter(
     options =>
@@ -172,6 +206,7 @@ app.MapGet(
     () => "Telenec Mail Statistics Server");
 
 app.MapUsageEndpoints();
+
 app.MapAdminEndpoints();
 
 app.Run();

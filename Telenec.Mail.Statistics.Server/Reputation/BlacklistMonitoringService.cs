@@ -29,15 +29,15 @@ public sealed record BlacklistMonitoringSnapshot(
 }
 
 /// <summary>
-/// Serverseitiger Monitoring-Dienst.
+/// Serverseitiger Blacklist-Monitoring-Dienst.
 ///
-/// Ablauf:
-/// 1. Konfiguration und DNS-Auflösung prüfen.
-/// 2. Alle registrierten IP-Blacklist-Prüfer
-///    über den gemeinsamen Batch-Runner ausführen.
-/// 3. Ergebnisse gesammelt veröffentlichen.
+/// Die Prüfungen erfolgen beim Serverstart und
+/// anschließend alle 15 Minuten.
 ///
-/// Dashboard-Aufrufe lösen keine DNSBL-Prüfungen aus.
+/// Der Admin-API-Aufruf löst keine eigenen
+/// externen Blacklist-Abfragen aus.
+///
+/// Alle Ergebnisse werden gemeinsam veröffentlicht.
 /// </summary>
 public sealed class BlacklistMonitoringService : BackgroundService
 {
@@ -47,9 +47,6 @@ public sealed class BlacklistMonitoringService : BackgroundService
     private readonly TimeProvider _timeProvider;
 
     private readonly ILogger<BlacklistMonitoringService> _logger;
-
-    private readonly PsblBlacklistChecker _psblChecker =
-        new();
 
     private readonly BlacklistBatchRunner _batchRunner =
         new();
@@ -79,38 +76,111 @@ public sealed class BlacklistMonitoringService : BackgroundService
             ?? "80.79.237.70";
 
         /*
-         * Zentrale Registrierung der aktiven Prüfer.
+         * Aktive Anbietergruppe:
          *
-         * Derzeit ist ausschließlich PSBL freigegeben.
+         * PSBL
+         * 0spam
+         * 0spam RBL
+         * UCEPROTECT Level 1
          *
-         * Weitere Anbieter werden erst nach Prüfung
-         * ihrer technischen Eigenschaften und
-         * Nutzungsbedingungen aufgenommen.
+         * DroneBL bleibt ausdrücklich deaktiviert,
+         * bis die DNS-Auflösung auf dem Zielserver
+         * geklärt wurde.
          *
-         * Die Registrierung selbst startet
-         * noch keine externe Abfrage.
+         * Nicht aufgelistete Profile werden
+         * niemals automatisch aktiviert.
          */
+
+        var approvedDnsblIds =
+            new HashSet<string>(StringComparer.Ordinal)
+            {
+                "0spam",
+                "0spam-rbl",
+                "uceprotectl1"
+            };
+
+        var approvedProfiles =
+            DnsBlacklistProviderProfiles.FirstBatch
+                .Where(profile =>
+                    approvedDnsblIds.Contains(
+                        profile.BlacklistId))
+                .ToArray();
+
+        /*
+         * Es müssen exakt die erwarteten drei
+         * DNSBL-Profile vorhanden sein.
+         *
+         * Fehlende oder doppelte Profile führen
+         * zu einem Startfehler statt zu einer
+         * stillschweigend unvollständigen Prüfung.
+         */
+
+        var actualIds =
+            approvedProfiles
+                .Select(profile => profile.BlacklistId)
+                .ToHashSet(StringComparer.Ordinal);
+
+        if (approvedProfiles.Length != approvedDnsblIds.Count
+            || !actualIds.SetEquals(approvedDnsblIds))
+        {
+            throw new InvalidOperationException(
+                "Die freigegebene DNSBL-Anbietergruppe " +
+                "ist unvollständig oder enthält Duplikate.");
+        }
+
+        /*
+         * Jeder DNSBL-Checker besitzt ein
+         * eigenes, unveränderliches Anbieterprofil.
+         *
+         * Der Batch-Runner entscheidet über
+         * Parallelisierung und Zeitlimits.
+         */
+
+        var dnsblJobs =
+            approvedProfiles
+                .Select(profile =>
+                {
+                    var checker =
+                        new DnsBlacklistChecker(profile);
+
+                    return new BlacklistCheckJob(
+                        profile.BlacklistId,
+                        checker.CheckAsync);
+                })
+                .ToArray();
+
+        /*
+         * PSBL bleibt an erster Stelle.
+         *
+         * Die bisherige PSBL-Implementierung
+         * wird nicht verändert.
+         */
+
+        var psblChecker = new PsblBlacklistChecker();
+
         _jobs = Array.AsReadOnly(
             new[]
             {
                 new BlacklistCheckJob(
                     "psbl",
-                    _psblChecker.CheckAsync)
-            });
+                    psblChecker.CheckAsync)
+            }
+            .Concat(dnsblJobs)
+            .ToArray());
 
         /*
-         * Initialzustand aller registrierten Prüfer.
-         *
-         * Noch nicht durchgeführte Prüfungen erhalten
-         * ausdrücklich den Status NotChecked.
+         * Alle registrierten Anbieter erhalten
+         * zunächst den Status NotChecked.
          */
-        var initialResults = CreateResultCollection(
-            _jobs.Select(job => new BlacklistCheckResult
-            {
-                BlacklistId = job.BlacklistId,
-                CheckedTarget = _expectedIpv4,
-                Status = BlacklistCheckStatus.NotChecked
-            }));
+
+        var initialResults =
+            CreateResultCollection(
+                _jobs.Select(job => new BlacklistCheckResult
+                {
+                    BlacklistId = job.BlacklistId,
+                    CheckedTarget = _expectedIpv4,
+                    Status = BlacklistCheckStatus.NotChecked
+                }));
 
         _snapshot = new BlacklistMonitoringSnapshot(
             Hostname: _hostname,
@@ -125,20 +195,14 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Liefert den zuletzt vollständig veröffentlichten
-    /// Monitoring-Snapshot ohne weitere DNS-Abfrage.
+    /// Gibt den zuletzt veröffentlichten
+    /// Monitoring-Zustand zurück.
     /// </summary>
     public BlacklistMonitoringSnapshot GetSnapshot()
     {
         return Volatile.Read(ref _snapshot);
     }
 
-    /// <summary>
-    /// Erste Prüfung direkt nach dem Serverstart.
-    /// Anschließend Wiederholung alle 15 Minuten.
-    ///
-    /// Durchläufe überschneiden sich nicht.
-    /// </summary>
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
@@ -159,21 +223,18 @@ public sealed class BlacklistMonitoringService : BackgroundService
         catch (OperationCanceledException)
             when (stoppingToken.IsCancellationRequested)
         {
-            // Reguläres Beenden des Hintergrunddienstes.
+            // Reguläres Beenden des Dienstes.
         }
     }
 
     /// <summary>
-    /// Gemeinsamer Monitoring-Durchlauf.
+    /// Führt einen Monitoring-Durchlauf aus.
     ///
-    /// Die erwartete Versand-IP muss zunächst
-    /// zur DNS-Auflösung des Mailservers passen.
+    /// Vor den Blacklist-Abfragen wird geprüft,
+    /// ob die konfigurierte Versand-IP zur
+    /// DNS-Auflösung des Mailservers passt.
     ///
-    /// Bei einer DNS-Abweichung werden keine
-    /// externen Blacklists abgefragt.
-    ///
-    /// Stattdessen bekommen alle registrierten
-    /// Prüfer einen fachlichen Fehlerstatus.
+    /// Erst danach startet der Batch-Runner.
     /// </summary>
     private async Task RunCheckAsync(
         CancellationToken cancellationToken)
@@ -199,7 +260,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
             {
                 results = CreateFailureResults(
                     startedAtUtc,
-                    "Die konfigurierte Prüf-IP ist keine gültige IPv4-Adresse.");
+                    "Die konfigurierte Prüf-IP ist " +
+                    "keine gültige IPv4-Adresse.");
             }
             else
             {
@@ -229,16 +291,17 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 else
                 {
                     /*
-                     * Die eigentlichen Blacklist-Abfragen
-                     * laufen jetzt ausschließlich über
-                     * unseren gemeinsamen Batch-Runner.
+                     * Ein gemeinsamer Batch für
+                     * alle vier Anbieter.
                      *
-                     * Derzeit wird genau ein Job ausgeführt:
-                     * PSBL.
+                     * Jeder Anbieter liefert sein
+                     * eigenes Prüfergebnis.
                      *
-                     * Später können weitere freigegebene
-                     * IP-DNSBL-Checker registriert werden.
+                     * Fehler einzelner Anbieter
+                     * werden durch den Batch-Runner
+                     * isoliert behandelt.
                      */
+
                     results =
                         await _batchRunner.RunAsync(
                             _jobs,
@@ -250,8 +313,6 @@ public sealed class BlacklistMonitoringService : BackgroundService
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
-            // Ein ausdrücklich angeforderter Abbruch
-            // wird nicht als Prüffehler umgedeutet.
             throw;
         }
         catch (Exception exception)
@@ -271,24 +332,18 @@ public sealed class BlacklistMonitoringService : BackgroundService
         /*
          * Rückwärtskompatibilität:
          *
-         * Die bisherige einzelne Result-Eigenschaft
-         * bezeichnet weiterhin ausdrücklich PSBL.
+         * Die bisherige Result-Eigenschaft
+         * bezeichnet weiterhin ausschließlich
+         * PSBL.
          *
-         * Die neue Results-Eigenschaft enthält
-         * alle registrierten Anbieter.
+         * Die neue Results-Sammlung enthält
+         * die vier aktiven Anbieter.
          */
+
         var psblResult = results["psbl"];
 
         var previousSnapshot = GetSnapshot();
 
-        /*
-         * Der bestehende Zeitstempel bezeichnet
-         * weiterhin die letzte erfolgreiche
-         * PSBL-Prüfung.
-         *
-         * Individuelle Prüfzeiten weiterer Anbieter
-         * befinden sich später in Results.
-         */
         var lastSuccessfulCheckUtc =
             psblResult.IsConclusive
                 ? psblResult.CompletedAtUtc
@@ -308,37 +363,47 @@ public sealed class BlacklistMonitoringService : BackgroundService
             };
 
         /*
-         * Alle Ergebnisse gemeinsam veröffentlichen.
-         *
-         * API-Leser erhalten dadurch entweder
-         * den alten oder den neuen vollständigen
-         * Monitoring-Zustand.
+         * Atomare Veröffentlichung.
          */
+
         Volatile.Write(
             ref _snapshot,
             newSnapshot);
+
+        var listedCount =
+            results.Values.Count(result =>
+                result.Status ==
+                    BlacklistCheckStatus.Listed);
+
+        var notListedCount =
+            results.Values.Count(result =>
+                result.Status ==
+                    BlacklistCheckStatus.NotListed);
+
+        var warningCount =
+            results.Count - listedCount - notListedCount;
 
         _logger.LogInformation(
             "Blacklist-Monitoring abgeschlossen. " +
             "Host: {Hostname}, IP: {IpAddress}, " +
             "Anbieter: {ProviderCount}, " +
-            "PSBL-Status: {PsblStatus}.",
+            "Nicht gelistet: {NotListedCount}, " +
+            "Gelistet: {ListedCount}, " +
+            "Unklar/Fehler: {WarningCount}.",
             _hostname,
             _expectedIpv4,
             results.Count,
-            psblResult.Status);
+            notListedCount,
+            listedCount,
+            warningCount);
     }
 
     /// <summary>
-    /// Erzeugt für alle registrierten Anbieter
-    /// einen technischen Fehlerzustand.
+    /// Erstellt Fehlerergebnisse für alle
+    /// registrierten Anbieter.
     ///
-    /// Beispielsweise dann, wenn bereits
-    /// die DNS-Auflösung des Mailservers
-    /// fehlgeschlagen ist.
-    ///
-    /// Kein Anbieter erhält dabei einen
-    /// grünen oder roten Listungsstatus.
+    /// Eine fehlgeschlagene Vorprüfung
+    /// darf niemals als NotListed erscheinen.
     /// </summary>
     private IReadOnlyDictionary<string, BlacklistCheckResult>
         CreateFailureResults(
@@ -358,14 +423,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Erstellt eine schreibgeschützte Sammlung
-    /// mit eindeutigen Blacklist-Kennungen.
-    ///
-    /// Wird für Initial- und Fehlerzustände
-    /// verwendet.
-    ///
-    /// Erfolgreiche Batch-Durchläufe liefern
-    /// ihre eigene schreibgeschützte Sammlung.
+    /// Erstellt eine schreibgeschützte
+    /// Sammlung mit eindeutigen Kennungen.
     /// </summary>
     private static IReadOnlyDictionary<string, BlacklistCheckResult>
         CreateResultCollection(
@@ -385,7 +444,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
                     result.BlacklistId))
             {
                 throw new InvalidOperationException(
-                    "Ein Blacklist-Ergebnis besitzt keine gültige Kennung.");
+                    "Ein Blacklist-Ergebnis besitzt " +
+                    "keine gültige Kennung.");
             }
 
             if (!dictionary.TryAdd(
@@ -393,7 +453,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
                     result))
             {
                 throw new InvalidOperationException(
-                    "Ein Blacklist-Ergebnis wurde mehrfach registriert: " +
+                    "Ein Blacklist-Ergebnis wurde " +
+                    "mehrfach registriert: " +
                     result.BlacklistId);
             }
         }

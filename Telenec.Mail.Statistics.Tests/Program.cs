@@ -6,209 +6,32 @@ namespace Telenec.Mail.Statistics.Tests;
 
 internal static class Program
 {
-    private const string PositiveQuery =
-        "2.0.0.127.test.example";
-
-    private const string NegativeQuery =
-        "1.0.0.127.test.example";
-
-    private const string TargetQuery =
-        "10.2.0.192.test.example";
-
-    private const string TestIpAddress = "192.0.2.10";
+    private const string TestIp = "192.0.2.10";
+    private const string PositiveQuery = "2.0.0.127.test.example";
+    private const string NegativeQuery = "1.0.0.127.test.example";
+    private const string TargetQuery = "10.2.0.192.test.example";
 
     private static readonly DnsBlacklistDnsResponse NxDomain =
         new(true, Array.Empty<IPAddress>());
 
+    private static readonly ProfileExpectation[] ExpectedProfiles =
+    {
+        new("0spam", "bl.0spam.org", "127.0.0.2"),
+        new("0spam-rbl", "rbl.0spam.org", "127.0.0.2"),
+        new("drone-bl", "dnsbl.dronebl.org", "127.0.0.1"),
+        new("uceprotectl1", "dnsbl-1.uceprotect.net", "127.0.0.2")
+    };
+
     private static async Task<int> Main()
     {
-        Console.WriteLine("Telenec DNSBL – Regressionstests");
-        Console.WriteLine();
-
         var passed = 0;
         var failed = 0;
 
-        var scenarios = new[]
-        {
-            new Scenario(
-                "Nicht gelistet",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                NxDomain,
-                BlacklistCheckStatus.NotListed,
-                false,
-                3),
-
-            new Scenario(
-                "Gelistet",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                Addresses("127.0.0.2"),
-                BlacklistCheckStatus.Listed,
-                true,
-                3),
-
-            new Scenario(
-                "Zugriff verweigert",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                Addresses("127.255.255.254"),
-                BlacklistCheckStatus.AccessDenied,
-                null,
-                3),
-
-            new Scenario(
-                "Unbekannter Antwortcode",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                Addresses("127.0.0.99"),
-                BlacklistCheckStatus.Unknown,
-                null,
-                3),
-
-            new Scenario(
-                "Gemischte Antwortcodes",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                Addresses("127.0.0.2", "127.0.0.99"),
-                BlacklistCheckStatus.Unknown,
-                null,
-                3),
-
-            new Scenario(
-                "Leere Anbieterantwort",
-                Addresses("127.0.0.2"),
-                NxDomain,
-                Addresses(),
-                BlacklistCheckStatus.Unknown,
-                null,
-                3),
-
-            new Scenario(
-                "Positive Kontrolle fehlgeschlagen",
-                NxDomain,
-                null,
-                null,
-                BlacklistCheckStatus.Failed,
-                null,
-                1),
-
-            new Scenario(
-                "Negative Kontrolle fehlgeschlagen",
-                Addresses("127.0.0.2"),
-                Addresses("127.0.0.2"),
-                null,
-                BlacklistCheckStatus.Failed,
-                null,
-                2),
-
-            new Scenario(
-                "Zugriff bei Kontrollabfrage verweigert",
-                Addresses("127.255.255.254"),
-                null,
-                null,
-                BlacklistCheckStatus.AccessDenied,
-                null,
-                1),
-
-            new Scenario(
-                "Mehrdeutige Positivkontrolle",
-                Addresses("127.0.0.2", "127.0.0.99"),
-                null,
-                null,
-                BlacklistCheckStatus.Failed,
-                null,
-                1)
-        };
-
-        foreach (var scenario in scenarios)
-        {
-            await RunTestAsync(
-                scenario.Name,
-                () => RunScenarioAsync(scenario));
-        }
-
-        await RunTestAsync(
-            "Ungültiges Prüfziel",
-            CheckInvalidAddressAsync);
-
-        Console.WriteLine();
-        Console.WriteLine(
-            "Blacklist-Batch – Mehrfachanbieter-Tests");
-        Console.WriteLine();
-
-        await RunTestAsync(
-            "Mehrere Anbieter in einem Durchlauf",
-            CheckMultipleProvidersAsync);
-
-        await RunTestAsync(
-            "Anbieterfehler bleiben isoliert",
-            CheckProviderFailureIsolationAsync);
-
-        await RunTestAsync(
-            "Leeres Prüfergebnis wird abgewiesen",
-            CheckNullResultAsync);
-
-        await RunTestAsync(
-            "Falsche Blacklist-Kennung wird abgewiesen",
-            CheckWrongBlacklistIdAsync);
-
-        await RunTestAsync(
-            "Abweichendes Prüfziel wird abgewiesen",
-            CheckWrongTargetAsync);
-
-        await RunTestAsync(
-            "Ungültige Prüfzeitpunkte werden abgewiesen",
-            CheckMissingTimestampsAsync);
-
-        await RunTestAsync(
-            "Doppelte Anbieterregistrierung wird abgewiesen",
-            CheckDuplicateRegistrationAsync);
-
-        await RunTestAsync(
-            "Unbekannter Anbieter wird abgewiesen",
-            CheckUnknownProviderAsync);
-
-        await RunTestAsync(
-            "Ungültige Batch-IP wird abgewiesen",
-            CheckInvalidBatchAddressAsync);
-
-        await RunTestAsync(
-            "Programmabbruch wird weitergegeben",
-            CheckBatchCancellationAsync);
-
-        Console.WriteLine();
-        Console.WriteLine(
-            "Blacklist-Batch – Timeout- und Lasttests");
-        Console.WriteLine();
-
-        await RunTestAsync(
-            "Ignorierter Abbruch führt zu Timeout",
-            CheckIgnoredCancellationTimeoutAsync);
-
-        await RunTestAsync(
-            "Maximal vier laufende Anbieter",
-            CheckMaximumConcurrencyAsync);
-
-        await RunTestAsync(
-            "Abbruch während hängender Prüfung",
-            CheckCancellationDuringPendingCheckAsync);
-
-        Console.WriteLine();
-
-        Console.WriteLine(
-            $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");
-
-        return failed == 0 ? 0 : 1;
-
-        async Task RunTestAsync(
-            string name,
-            Func<Task> test)
+        async Task Test(string name, Func<Task> action)
         {
             try
             {
-                await test();
-
+                await action();
                 Console.WriteLine($"[OK] {name}");
                 passed++;
             }
@@ -219,375 +42,401 @@ internal static class Program
                 failed++;
             }
         }
+
+        Console.WriteLine("Telenec DNSBL – Regressionstests");
+        Console.WriteLine();
+
+        var scenarios = new[]
+        {
+            new Scenario("Nicht gelistet",
+                Addresses("127.0.0.2"), NxDomain, NxDomain,
+                BlacklistCheckStatus.NotListed, false, 3),
+
+            new Scenario("Gelistet",
+                Addresses("127.0.0.2"), NxDomain,
+                Addresses("127.0.0.2"),
+                BlacklistCheckStatus.Listed, true, 3),
+
+            new Scenario("Zugriff verweigert",
+                Addresses("127.0.0.2"), NxDomain,
+                Addresses("127.255.255.254"),
+                BlacklistCheckStatus.AccessDenied, null, 3),
+
+            new Scenario("Unbekannter Antwortcode",
+                Addresses("127.0.0.2"), NxDomain,
+                Addresses("127.0.0.99"),
+                BlacklistCheckStatus.Unknown, null, 3),
+
+            new Scenario("Gemischte Antwortcodes",
+                Addresses("127.0.0.2"), NxDomain,
+                Addresses("127.0.0.2", "127.0.0.99"),
+                BlacklistCheckStatus.Unknown, null, 3),
+
+            new Scenario("Leere Anbieterantwort",
+                Addresses("127.0.0.2"), NxDomain, Addresses(),
+                BlacklistCheckStatus.Unknown, null, 3),
+
+            new Scenario("Positive Kontrolle fehlgeschlagen",
+                NxDomain, null, null,
+                BlacklistCheckStatus.Failed, null, 1),
+
+            new Scenario("Negative Kontrolle fehlgeschlagen",
+                Addresses("127.0.0.2"),
+                Addresses("127.0.0.2"), null,
+                BlacklistCheckStatus.Failed, null, 2),
+
+            new Scenario("Zugriff bei Kontrollabfrage verweigert",
+                Addresses("127.255.255.254"), null, null,
+                BlacklistCheckStatus.AccessDenied, null, 1),
+
+            new Scenario("Mehrdeutige Positivkontrolle",
+                Addresses("127.0.0.2", "127.0.0.99"),
+                null, null,
+                BlacklistCheckStatus.Failed, null, 1)
+        };
+
+        foreach (var scenario in scenarios)
+        {
+            await Test(
+                scenario.Name,
+                () => RunDnsScenarioAsync(scenario));
+        }
+
+        await Test("Ungültiges Prüfziel", CheckInvalidAddressAsync);
+
+        Console.WriteLine();
+        Console.WriteLine("Blacklist-Batch – Mehrfachanbieter-Tests");
+        Console.WriteLine();
+
+        await Test("Mehrere Anbieter in einem Durchlauf",
+            CheckMultipleProvidersAsync);
+
+        await Test("Anbieterfehler bleiben isoliert",
+            CheckFailureIsolationAsync);
+
+        await Test("Leeres Prüfergebnis wird abgewiesen",
+            CheckNullResultAsync);
+
+        await Test("Falsche Blacklist-Kennung wird abgewiesen",
+            CheckWrongIdAsync);
+
+        await Test("Abweichendes Prüfziel wird abgewiesen",
+            CheckWrongTargetAsync);
+
+        await Test("Ungültige Prüfzeitpunkte werden abgewiesen",
+            CheckMissingTimestampsAsync);
+
+        await Test("Doppelte Anbieterregistrierung wird abgewiesen",
+            CheckDuplicateRegistrationAsync);
+
+        await Test("Unbekannter Anbieter wird abgewiesen",
+            CheckUnknownProviderAsync);
+
+        await Test("Ungültige Batch-IP wird abgewiesen",
+            CheckInvalidBatchAddressAsync);
+
+        await Test("Programmabbruch wird weitergegeben",
+            CheckBatchCancellationAsync);
+
+        Console.WriteLine();
+        Console.WriteLine("Blacklist-Batch – Timeout- und Lasttests");
+        Console.WriteLine();
+
+        await Test("Ignorierter Abbruch führt zu Timeout",
+            CheckIgnoredCancellationTimeoutAsync);
+
+        await Test("Maximal vier laufende Anbieter",
+            CheckMaximumConcurrencyAsync);
+
+        await Test("Abbruch während hängender Prüfung",
+            CheckCancellationDuringPendingCheckAsync);
+
+        Console.WriteLine();
+        Console.WriteLine("DNSBL-Anbieterprofile – Erste Gruppe");
+        Console.WriteLine();
+
+        await Test("Vier eindeutige, gültige Anbieterprofile",
+            CheckProviderDefinitionsAsync);
+
+        await Test("Vier Anbieter: Nicht gelistet",
+            () => CheckProviderScenariosAsync(
+                ProfileTestMode.NotListed));
+
+        await Test("Vier Anbieter: Gelistet",
+            () => CheckProviderScenariosAsync(
+                ProfileTestMode.Listed));
+
+        await Test("Vier Anbieter: Unbekannter Antwortcode",
+            () => CheckProviderScenariosAsync(
+                ProfileTestMode.Unknown));
+
+        await Test("Vier Anbieter: Defekte Positivkontrolle",
+            () => CheckProviderScenariosAsync(
+                ProfileTestMode.FailedControl));
+
+        Console.WriteLine();
+        Console.WriteLine(
+            $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");
+
+        return failed == 0 ? 0 : 1;
     }
 
-    // ===================================================
-    // DNSBL-Engine – bisherige Regressionstests
-    // ===================================================
+    // ---------------------------------------------------
+    // Bestehende DNSBL-Tests
+    // ---------------------------------------------------
 
-    private static async Task RunScenarioAsync(
-        Scenario scenario)
+    private static async Task RunDnsScenarioAsync(Scenario scenario)
     {
-        var answers =
-            new Dictionary<string, DnsBlacklistDnsResponse>(
-                StringComparer.OrdinalIgnoreCase);
+        var answers = new Dictionary<string, DnsBlacklistDnsResponse>();
 
-        if (scenario.PositiveResponse is not null)
-            answers.Add(PositiveQuery, scenario.PositiveResponse);
+        if (scenario.Positive is not null)
+            answers.Add(PositiveQuery, scenario.Positive);
 
-        if (scenario.NegativeResponse is not null)
-            answers.Add(NegativeQuery, scenario.NegativeResponse);
+        if (scenario.Negative is not null)
+            answers.Add(NegativeQuery, scenario.Negative);
 
-        if (scenario.TargetResponse is not null)
-            answers.Add(TargetQuery, scenario.TargetResponse);
+        if (scenario.Target is not null)
+            answers.Add(TargetQuery, scenario.Target);
 
-        var resolver = new FakeDnsResolver(answers);
-
+        var resolver = new FakeResolver(answers);
         var checker = new DnsBlacklistChecker(
-            CreateProfile(),
-            resolver);
+            CreateTestProfile(), resolver);
 
-        var result = await checker.CheckAsync(TestIpAddress);
+        var result = await checker.CheckAsync(TestIp);
 
-        Assert(
-            result.Status == scenario.ExpectedStatus,
-            $"Status erwartet: {scenario.ExpectedStatus}, " +
-            $"erhalten: {result.Status}");
+        Assert(result.Status == scenario.Status,
+            $"Erwartet {scenario.Status}, erhalten {result.Status}");
 
-        Assert(
-            result.IsListed == scenario.ExpectedIsListed,
-            "IsListed stimmt nicht mit dem erwarteten Zustand überein.");
+        Assert(result.IsListed == scenario.IsListed,
+            "IsListed ist falsch.");
 
-        var expectedConclusive =
-            scenario.ExpectedStatus is
-                BlacklistCheckStatus.Listed
-                or BlacklistCheckStatus.NotListed;
+        Assert(result.IsConclusive ==
+            (scenario.Status is BlacklistCheckStatus.Listed
+                or BlacklistCheckStatus.NotListed),
+            "IsConclusive ist falsch.");
 
-        Assert(
-            result.IsConclusive == expectedConclusive,
-            "IsConclusive ist fachlich nicht korrekt.");
+        Assert(result.BlacklistId == "test-dnsbl",
+            "Blacklist-Kennung ist falsch.");
 
-        Assert(
-            result.BlacklistId == "test-dnsbl",
-            "Die Blacklist-Kennung ist nicht korrekt.");
+        Assert(result.CheckedTarget == TestIp,
+            "Prüfziel ist falsch.");
 
-        Assert(
-            result.CheckedTarget == TestIpAddress,
-            "Das geprüfte Ziel ist nicht korrekt.");
+        Assert(result.StartedAtUtc.HasValue &&
+            result.CompletedAtUtc.HasValue,
+            "Zeitstempel fehlen.");
 
-        Assert(
-            result.StartedAtUtc.HasValue
-            && result.CompletedAtUtc.HasValue,
-            "Prüfzeitpunkte fehlen.");
+        Assert(resolver.Queries.Count == scenario.QueryCount,
+            "Anzahl der DNS-Abfragen ist falsch.");
 
-        Assert(
-            resolver.Queries.Count == scenario.ExpectedQueryCount,
-            "Die Anzahl der DNS-Abfragen ist falsch.");
-
-        var expectedQueries =
-            new[]
-            {
-                PositiveQuery,
-                NegativeQuery,
-                TargetQuery
-            }
-            .Take(scenario.ExpectedQueryCount);
-
-        Assert(
-            resolver.Queries.SequenceEqual(
-                expectedQueries,
-                StringComparer.OrdinalIgnoreCase),
-            "Die DNS-Abfragen wurden nicht in der erwarteten Reihenfolge durchgeführt.");
+        Assert(resolver.Queries.SequenceEqual(
+                new[] { PositiveQuery, NegativeQuery, TargetQuery }
+                    .Take(scenario.QueryCount)),
+            "DNS-Abfragen wurden in falscher Reihenfolge ausgeführt.");
     }
 
     private static async Task CheckInvalidAddressAsync()
     {
-        var resolver = new FakeDnsResolver(
+        var resolver = new FakeResolver(
             new Dictionary<string, DnsBlacklistDnsResponse>());
 
         var checker = new DnsBlacklistChecker(
-            CreateProfile(),
-            resolver);
+            CreateTestProfile(), resolver);
 
-        var result = await checker.CheckAsync(
-            "keine-ip-adresse");
+        var result = await checker.CheckAsync("keine-ip-adresse");
 
-        Assert(
-            result.Status == BlacklistCheckStatus.Failed,
-            "Ein ungültiges Prüfziel wurde nicht als Fehler bewertet.");
+        Assert(result.Status == BlacklistCheckStatus.Failed,
+            "Ungültige IP wurde nicht abgewiesen.");
 
-        Assert(
-            !result.IsConclusive && result.IsListed is null,
-            "Ein ungültiges Prüfziel wurde als verlässliches Ergebnis bewertet.");
+        Assert(!result.IsConclusive && result.IsListed is null,
+            "Ungültige IP wurde als belastbarer Befund bewertet.");
 
-        Assert(
-            resolver.Queries.Count == 0,
-            "Bei ungültigem Prüfziel wurde trotzdem DNS abgefragt.");
+        Assert(resolver.Queries.Count == 0,
+            "Trotz ungültiger IP wurde DNS abgefragt.");
     }
 
-    // ===================================================
-    // Batch-Runner – bestehende Regressionstests
-    // ===================================================
+    // ---------------------------------------------------
+    // Bestehende Batch-Regressionstests
+    // ---------------------------------------------------
 
     private static async Task CheckMultipleProvidersAsync()
     {
-        var runner = new BlacklistBatchRunner();
+        var results = await new BlacklistBatchRunner().RunAsync(
+            new[]
+            {
+                Job("psbl", BlacklistCheckStatus.NotListed),
+                Job("spamcop", BlacklistCheckStatus.Listed),
+                Job("blocklist-de", BlacklistCheckStatus.AccessDenied)
+            },
+            TestIp);
 
-        var jobs = new[]
-        {
-            CreateJob(
-                "psbl",
-                BlacklistCheckStatus.NotListed),
+        Assert(results.Count == 3, "Es fehlen Ergebnisse.");
 
-            CreateJob(
-                "spamcop",
-                BlacklistCheckStatus.Listed),
-
-            CreateJob(
-                "blocklist-de",
-                BlacklistCheckStatus.AccessDenied)
-        };
-
-        var results =
-            await runner.RunAsync(jobs, TestIpAddress);
-
-        Assert(results.Count == 3,
-            "Es wurden nicht alle drei Ergebnisse geliefert.");
-
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.NotListed,
-            "Das PSBL-Ergebnis ist falsch.");
-
-        Assert(
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.NotListed &&
             results["psbl"].IsListed == false,
-            "PSBL wurde nicht als negativer Befund bewertet.");
+            "PSBL ist falsch.");
 
-        Assert(
-            results["spamcop"].Status == BlacklistCheckStatus.Listed,
-            "Das simulierte SpamCop-Ergebnis ist falsch.");
-
-        Assert(
+        Assert(results["spamcop"].Status ==
+            BlacklistCheckStatus.Listed &&
             results["spamcop"].IsListed == true,
-            "Der simulierte Listungstreffer wurde nicht erkannt.");
+            "Simulierter Listungstreffer ist falsch.");
 
-        Assert(
-            results["blocklist-de"].Status ==
-                BlacklistCheckStatus.AccessDenied,
-            "Die simulierte Zugriffssperre wurde nicht erkannt.");
-
-        Assert(
+        Assert(results["blocklist-de"].Status ==
+            BlacklistCheckStatus.AccessDenied &&
             results["blocklist-de"].IsListed is null,
-            "Die Zugriffssperre wurde als Listungsergebnis bewertet.");
+            "Zugriffssperre ist falsch.");
     }
 
-    private static async Task CheckProviderFailureIsolationAsync()
+    private static async Task CheckFailureIsolationAsync()
     {
-        var runner = new BlacklistBatchRunner();
+        var results = await new BlacklistBatchRunner().RunAsync(
+            new[]
+            {
+                Job("psbl", BlacklistCheckStatus.NotListed),
+                new BlacklistCheckJob(
+                    "spamcop",
+                    (_, _) => throw new InvalidOperationException(
+                        "Simulierter Ausfall"))
+            },
+            TestIp);
 
-        var jobs = new[]
-        {
-            CreateJob(
-                "psbl",
-                BlacklistCheckStatus.NotListed),
+        Assert(results.Count == 2, "Ein Ergebnis fehlt.");
 
-            new BlacklistCheckJob(
-                "spamcop",
-                (_, _) => throw new InvalidOperationException(
-                    "Simulierter Anbieterausfall"))
-        };
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.NotListed,
+            "Funktionierender Anbieter wurde beeinträchtigt.");
 
-        var results =
-            await runner.RunAsync(jobs, TestIpAddress);
-
-        Assert(results.Count == 2,
-            "Der Batch hat nicht beide Ergebnisse geliefert.");
-
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.NotListed,
-            "Der funktionierende Anbieter wurde beeinträchtigt.");
-
-        Assert(
-            results["spamcop"].Status == BlacklistCheckStatus.Failed,
-            "Der Anbieterausfall wurde nicht als Fehler erfasst.");
-
-        Assert(
-            !results["spamcop"].IsConclusive
-            && results["spamcop"].IsListed is null,
-            "Der Anbieterausfall wurde als verlässlicher Befund bewertet.");
+        Assert(results["spamcop"].Status ==
+            BlacklistCheckStatus.Failed &&
+            !results["spamcop"].IsConclusive &&
+            results["spamcop"].IsListed is null,
+            "Anbieterausfall wurde falsch interpretiert.");
     }
 
     private static async Task CheckNullResultAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        var jobs = new[]
-        {
-            new BlacklistCheckJob(
-                "psbl",
-                (_, _) => Task.FromResult<BlacklistCheckResult>(
-                    null!))
-        };
-
-        var results =
-            await runner.RunAsync(jobs, TestIpAddress);
-
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.Failed,
-            "Ein leeres Ergebnis wurde nicht abgewiesen.");
-    }
-
-    private static async Task CheckWrongBlacklistIdAsync()
-    {
-        var runner = new BlacklistBatchRunner();
-
-        var results = await runner.RunAsync(
+        var results = await new BlacklistBatchRunner().RunAsync(
             new[]
             {
-                CreateJob(
+                new BlacklistCheckJob(
                     "psbl",
-                    BlacklistCheckStatus.NotListed,
+                    (_, _) => Task.FromResult<BlacklistCheckResult>(
+                        null!))
+            },
+            TestIp);
+
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.Failed,
+            "Null-Ergebnis wurde akzeptiert.");
+    }
+
+    private static async Task CheckWrongIdAsync()
+    {
+        var results = await new BlacklistBatchRunner().RunAsync(
+            new[]
+            {
+                Job("psbl", BlacklistCheckStatus.NotListed,
                     actualId: "spamcop")
             },
-            TestIpAddress);
+            TestIp);
 
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.Failed,
-            "Eine falsche Blacklist-Kennung wurde akzeptiert.");
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.Failed,
+            "Falsche Blacklist-Kennung wurde akzeptiert.");
     }
 
     private static async Task CheckWrongTargetAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        var results = await runner.RunAsync(
+        var results = await new BlacklistBatchRunner().RunAsync(
             new[]
             {
-                CreateJob(
-                    "psbl",
-                    BlacklistCheckStatus.NotListed,
+                Job("psbl", BlacklistCheckStatus.NotListed,
                     actualTarget: "192.0.2.99")
             },
-            TestIpAddress);
+            TestIp);
 
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.Failed,
-            "Ein abweichendes Prüfziel wurde akzeptiert.");
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.Failed,
+            "Falsches Prüfziel wurde akzeptiert.");
     }
 
     private static async Task CheckMissingTimestampsAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        var results = await runner.RunAsync(
+        var results = await new BlacklistBatchRunner().RunAsync(
             new[]
             {
-                CreateJob(
-                    "psbl",
-                    BlacklistCheckStatus.NotListed,
-                    includeTimestamps: false)
+                Job("psbl", BlacklistCheckStatus.NotListed,
+                    withTimestamps: false)
             },
-            TestIpAddress);
+            TestIp);
 
-        Assert(
-            results["psbl"].Status == BlacklistCheckStatus.Failed,
-            "Ein Prüfergebnis ohne Zeitstempel wurde akzeptiert.");
-
-        Assert(
+        Assert(results["psbl"].Status ==
+            BlacklistCheckStatus.Failed &&
             results["psbl"].IsListed is null,
-            "Ein fehlerhaftes Prüfergebnis wurde als negativ bewertet.");
+            "Ergebnis ohne Zeitstempel wurde akzeptiert.");
     }
 
     private static async Task CheckDuplicateRegistrationAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        await ExpectExceptionAsync<InvalidOperationException>(
-            () => runner.RunAsync(
+        await ExpectAsync<InvalidOperationException>(
+            () => new BlacklistBatchRunner().RunAsync(
                 new[]
                 {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed),
-
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed)
+                    Job("psbl", BlacklistCheckStatus.NotListed),
+                    Job("psbl", BlacklistCheckStatus.NotListed)
                 },
-                TestIpAddress));
+                TestIp));
     }
 
     private static async Task CheckUnknownProviderAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        await ExpectExceptionAsync<InvalidOperationException>(
-            () => runner.RunAsync(
+        await ExpectAsync<InvalidOperationException>(
+            () => new BlacklistBatchRunner().RunAsync(
                 new[]
                 {
-                    CreateJob(
-                        "anbieter-existiert-nicht",
+                    Job("anbieter-existiert-nicht",
                         BlacklistCheckStatus.NotListed)
                 },
-                TestIpAddress));
+                TestIp));
     }
 
     private static async Task CheckInvalidBatchAddressAsync()
     {
-        var runner = new BlacklistBatchRunner();
-
-        await ExpectExceptionAsync<ArgumentException>(
-            () => runner.RunAsync(
+        await ExpectAsync<ArgumentException>(
+            () => new BlacklistBatchRunner().RunAsync(
                 new[]
                 {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed)
+                    Job("psbl", BlacklistCheckStatus.NotListed)
                 },
                 "keine-ip-adresse"));
     }
 
     private static async Task CheckBatchCancellationAsync()
     {
-        var runner = new BlacklistBatchRunner();
+        using var source = new CancellationTokenSource();
+        source.Cancel();
 
-        using var cancellation =
-            new CancellationTokenSource();
-
-        cancellation.Cancel();
-
-        await ExpectExceptionAsync<OperationCanceledException>(
-            () => runner.RunAsync(
+        await ExpectAsync<OperationCanceledException>(
+            () => new BlacklistBatchRunner().RunAsync(
                 new[]
                 {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed)
+                    Job("psbl", BlacklistCheckStatus.NotListed)
                 },
-                TestIpAddress,
-                cancellation.Token));
+                TestIp,
+                source.Token));
     }
 
-    // ===================================================
-    // NEU: Timeout- und Parallelitätsprüfung
-    // ===================================================
+    // ---------------------------------------------------
+    // Bestehende Timeout- und Parallelitätstests
+    // ---------------------------------------------------
 
-    /// <summary>
-    /// Ein Anbieter ignoriert die Abbruchanforderung.
-    ///
-    /// Der Batch muss trotzdem nach seinem
-    /// Zeitlimit mit Failed zurückkehren.
-    ///
-    /// Das simulierte Hängen wird anschließend
-    /// im finally-Block aufgelöst.
-    /// </summary>
     private static async Task CheckIgnoredCancellationTimeoutAsync()
     {
         var runner = new BlacklistBatchRunner(
             TimeSpan.FromMilliseconds(200));
 
-        var pending =
-            new TaskCompletionSource<BlacklistCheckResult>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<BlacklistCheckResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         try
         {
@@ -595,58 +444,37 @@ internal static class Program
                     new[]
                     {
                         new BlacklistCheckJob(
-                            "psbl",
-                            (_, _) => pending.Task)
+                            "psbl", (_, _) => pending.Task)
                     },
-                    TestIpAddress)
+                    TestIp)
                 .WaitAsync(TimeSpan.FromSeconds(5));
 
             var result = results["psbl"];
 
-            Assert(
-                result.Status == BlacklistCheckStatus.Failed,
-                "Der hängende Anbieter wurde nicht als Fehler bewertet.");
+            Assert(result.Status == BlacklistCheckStatus.Failed,
+                "Timeout wurde nicht erkannt.");
 
-            Assert(
-                !result.IsConclusive && result.IsListed is null,
-                "Der Timeout wurde als verlässliches Ergebnis bewertet.");
+            Assert(!result.IsConclusive && result.IsListed is null,
+                "Timeout wurde als belastbarer Befund interpretiert.");
 
-            Assert(
-                result.ErrorMessage?.Contains(
+            Assert(result.ErrorMessage?.Contains(
                     "Zeitlimit",
                     StringComparison.OrdinalIgnoreCase) == true,
-                "Die Timeout-Meldung fehlt.");
+                "Timeout-Meldung fehlt.");
         }
         finally
         {
-            pending.TrySetResult(CreateResult(
-                "psbl",
-                TestIpAddress,
-                BlacklistCheckStatus.NotListed));
+            pending.TrySetResult(Result(
+                "psbl", TestIp, BlacklistCheckStatus.NotListed));
         }
     }
 
-    /// <summary>
-    /// Fünf getrennte Batches verwenden
-    /// dieselbe Runner-Instanz.
-    ///
-    /// Vier Anbieter dürfen gleichzeitig
-    /// tatsächlich laufen.
-    ///
-    /// Der fünfte muss wegen des belegten
-    /// Prüfplatzes scheitern.
-    ///
-    /// Dadurch überprüfen wir die Begrenzung
-    /// auch über mehrere Batch-Aufrufe hinweg.
-    /// </summary>
     private static async Task CheckMaximumConcurrencyAsync()
     {
-        var runner = new BlacklistBatchRunner(
-            TimeSpan.FromSeconds(2));
+        var runner = new BlacklistBatchRunner(TimeSpan.FromSeconds(2));
 
-        var pending =
-            new TaskCompletionSource<BlacklistCheckResult>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<BlacklistCheckResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         var startedCount = 0;
 
@@ -660,73 +488,51 @@ internal static class Program
                             "psbl",
                             (_, _) =>
                             {
-                                Interlocked.Increment(
-                                    ref startedCount);
-
-                                // Absichtlich ignorierter Token.
+                                Interlocked.Increment(ref startedCount);
                                 return pending.Task;
                             })
                     },
-                    TestIpAddress))
+                    TestIp))
                 .ToArray();
 
             var results = await Task.WhenAll(runs)
                 .WaitAsync(TimeSpan.FromSeconds(8));
 
-            Assert(
-                Volatile.Read(ref startedCount) == 4,
-                "Die Parallelitätsgrenze wurde nicht korrekt eingehalten.");
+            Assert(Volatile.Read(ref startedCount) == 4,
+                "Mehr als vier Prüfer wurden gestartet.");
 
-            Assert(
-                results.All(item =>
-                    item["psbl"].Status ==
-                    BlacklistCheckStatus.Failed),
-                "Nicht alle blockierten Anbieter wurden als Fehler bewertet.");
+            Assert(results.All(item =>
+                    item["psbl"].Status == BlacklistCheckStatus.Failed),
+                "Blockierte Prüfer wurden falsch bewertet.");
 
-            var unavailableSlots = results.Count(item =>
-                item["psbl"].ErrorMessage?.Contains(
-                    "Kein freier Prüfplatz",
-                    StringComparison.OrdinalIgnoreCase) == true);
-
-            Assert(
-                unavailableSlots == 1,
-                "Ein belegter Prüfplatz wurde nicht korrekt erkannt.");
+            Assert(results.Count(item =>
+                    item["psbl"].ErrorMessage?.Contains(
+                        "Kein freier Prüfplatz",
+                        StringComparison.OrdinalIgnoreCase) == true) == 1,
+                "Fehlender Prüfplatz wurde nicht erkannt.");
         }
         finally
         {
-            pending.TrySetResult(CreateResult(
-                "psbl",
-                TestIpAddress,
-                BlacklistCheckStatus.NotListed));
+            pending.TrySetResult(Result(
+                "psbl", TestIp, BlacklistCheckStatus.NotListed));
         }
     }
 
-    /// <summary>
-    /// Der Benutzer bzw. Host beendet
-    /// einen laufenden Batch ausdrücklich.
-    ///
-    /// Auch wenn ein Prüfer noch hängt,
-    /// muss der Abbruch weitergegeben werden.
-    /// </summary>
     private static async Task CheckCancellationDuringPendingCheckAsync()
     {
-        var runner = new BlacklistBatchRunner(
-            TimeSpan.FromSeconds(3));
+        var runner = new BlacklistBatchRunner(TimeSpan.FromSeconds(3));
 
-        using var cancellation =
-            new CancellationTokenSource();
+        using var source = new CancellationTokenSource();
 
-        var pending =
-            new TaskCompletionSource<BlacklistCheckResult>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<BlacklistCheckResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var started =
-            new TaskCompletionSource(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         try
         {
-            var batchTask = runner.RunAsync(
+            var running = runner.RunAsync(
                 new[]
                 {
                     new BlacklistCheckJob(
@@ -734,82 +540,218 @@ internal static class Program
                         (_, _) =>
                         {
                             started.TrySetResult();
-
-                            // Prüfer ignoriert den Abbruch.
                             return pending.Task;
                         })
                 },
-                TestIpAddress,
-                cancellation.Token);
+                TestIp,
+                source.Token);
 
-            await started.Task.WaitAsync(
-                TimeSpan.FromSeconds(5));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            source.Cancel();
 
-            cancellation.Cancel();
-
-            await ExpectExceptionAsync<OperationCanceledException>(
-                () => batchTask.WaitAsync(
-                    TimeSpan.FromSeconds(5)));
+            await ExpectAsync<OperationCanceledException>(
+                () => running.WaitAsync(TimeSpan.FromSeconds(5)));
         }
         finally
         {
-            pending.TrySetResult(CreateResult(
-                "psbl",
-                TestIpAddress,
-                BlacklistCheckStatus.NotListed));
+            pending.TrySetResult(Result(
+                "psbl", TestIp, BlacklistCheckStatus.NotListed));
         }
     }
 
-    // ===================================================
-    // Gemeinsame Hilfsfunktionen
-    // ===================================================
+    // ---------------------------------------------------
+    // NEU: Gemeinsame Tests der vier DNSBL-Profile
+    // ---------------------------------------------------
 
-    private static BlacklistCheckJob CreateJob(
-        string blacklistId,
+    private static Task CheckProviderDefinitionsAsync()
+    {
+        var profiles = DnsBlacklistProviderProfiles.FirstBatch;
+
+        Assert(profiles.Count == 4,
+            "Es werden genau vier Anbieterprofile erwartet.");
+
+        Assert(profiles.Select(p => p.BlacklistId).Distinct().Count() == 4,
+            "Die Anbieterkennungen sind nicht eindeutig.");
+
+        var knownIds = BlacklistCatalog.Entries
+            .Select(entry => entry.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var expectation in ExpectedProfiles)
+        {
+            var profile = profiles.SingleOrDefault(
+                p => p.BlacklistId == expectation.Id);
+
+            Assert(profile is not null,
+                $"Anbieterprofil fehlt: {expectation.Id}");
+
+            Assert(knownIds.Contains(profile.BlacklistId),
+                $"Katalogeintrag fehlt: {expectation.Id}");
+
+            Assert(profile.DnsZone == expectation.Zone,
+                $"DNS-Zone ist falsch: {expectation.Id}");
+
+            Assert(profile.PositiveControlAddress == "127.0.0.2",
+                $"Positive Kontrolladresse ist falsch: {expectation.Id}");
+
+            Assert(profile.NegativeControlAddress == "127.0.0.1",
+                $"Negative Kontrolladresse ist falsch: {expectation.Id}");
+
+            Assert(profile.ListedReturnCodes.Contains(
+                    expectation.PositiveCode),
+                $"Positiver Kontrollcode fehlt: {expectation.Id}");
+
+            Assert(!profile.ListedReturnCodes.Intersect(
+                    profile.AccessDeniedReturnCodes).Any(),
+                $"Listung und Zugriffssperre überschneiden sich: {expectation.Id}");
+
+            // Prüft die strukturelle Gültigkeit
+            // der Zone, Kontrolladressen und Rückgabecodes.
+            _ = new DnsBlacklistChecker(
+                profile,
+                new FakeResolver(
+                    new Dictionary<string, DnsBlacklistDnsResponse>()));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static async Task CheckProviderScenariosAsync(
+        ProfileTestMode mode)
+    {
+        foreach (var expectation in ExpectedProfiles)
+        {
+            var profile = DnsBlacklistProviderProfiles.FirstBatch
+                .Single(p => p.BlacklistId == expectation.Id);
+
+            var positiveQuery =
+                $"2.0.0.127.{profile.DnsZone}";
+
+            var negativeQuery =
+                $"1.0.0.127.{profile.DnsZone}";
+
+            var targetQuery =
+                $"10.2.0.192.{profile.DnsZone}";
+
+            var answers = new Dictionary<
+                string, DnsBlacklistDnsResponse>();
+
+            answers.Add(
+                positiveQuery,
+                mode == ProfileTestMode.FailedControl
+                    ? NxDomain
+                    : Addresses(expectation.PositiveCode));
+
+            if (mode != ProfileTestMode.FailedControl)
+            {
+                answers.Add(negativeQuery, NxDomain);
+
+                answers.Add(
+                    targetQuery,
+                    mode switch
+                    {
+                        ProfileTestMode.NotListed => NxDomain,
+                        ProfileTestMode.Listed =>
+                            Addresses(expectation.PositiveCode),
+                        ProfileTestMode.Unknown =>
+                            Addresses("127.0.0.254"),
+                        _ => throw new InvalidOperationException(
+                            "Unbekannter Testmodus.")
+                    });
+            }
+
+            var resolver = new FakeResolver(answers);
+            var checker = new DnsBlacklistChecker(
+                profile, resolver);
+
+            var result = await checker.CheckAsync(TestIp);
+
+            var expectedStatus = mode switch
+            {
+                ProfileTestMode.NotListed =>
+                    BlacklistCheckStatus.NotListed,
+                ProfileTestMode.Listed =>
+                    BlacklistCheckStatus.Listed,
+                ProfileTestMode.Unknown =>
+                    BlacklistCheckStatus.Unknown,
+                ProfileTestMode.FailedControl =>
+                    BlacklistCheckStatus.Failed,
+                _ => throw new InvalidOperationException()
+            };
+
+            Assert(result.Status == expectedStatus,
+                $"{expectation.Id}: Erwartet {expectedStatus}, " +
+                $"erhalten {result.Status}.");
+
+            Assert(result.BlacklistId == expectation.Id,
+                $"{expectation.Id}: Blacklist-Kennung falsch.");
+
+            Assert(result.CheckedTarget == TestIp,
+                $"{expectation.Id}: Prüfziel falsch.");
+
+            Assert(result.IsConclusive ==
+                (mode is ProfileTestMode.NotListed
+                    or ProfileTestMode.Listed),
+                $"{expectation.Id}: IsConclusive falsch.");
+
+            Assert(result.IsListed == (mode switch
+            {
+                ProfileTestMode.NotListed => false,
+                ProfileTestMode.Listed => true,
+                _ => (bool?)null
+            }), $"{expectation.Id}: IsListed falsch.");
+
+            var expectedQueries = mode == ProfileTestMode.FailedControl
+                ? new[] { positiveQuery }
+                : new[] { positiveQuery, negativeQuery, targetQuery };
+
+            Assert(resolver.Queries.SequenceEqual(expectedQueries),
+                $"{expectation.Id}: DNS-Abfragen falsch.");
+
+            Assert(result.StartedAtUtc.HasValue &&
+                result.CompletedAtUtc.HasValue,
+                $"{expectation.Id}: Zeitstempel fehlen.");
+        }
+    }
+
+    // ---------------------------------------------------
+    // Gemeinsame Hilfsfunktionen
+    // ---------------------------------------------------
+
+    private static BlacklistCheckJob Job(
+        string id,
         BlacklistCheckStatus status,
         string? actualId = null,
         string? actualTarget = null,
-        bool includeTimestamps = true)
+        bool withTimestamps = true)
     {
         return new BlacklistCheckJob(
-            blacklistId,
-            (target, cancellationToken) =>
+            id,
+            (target, token) =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                token.ThrowIfCancellationRequested();
 
                 var now = DateTimeOffset.UtcNow;
 
-                var result = new BlacklistCheckResult
+                return Task.FromResult(new BlacklistCheckResult
                 {
-                    BlacklistId =
-                        actualId ?? blacklistId,
-
-                    CheckedTarget =
-                        actualTarget ?? target,
-
+                    BlacklistId = actualId ?? id,
+                    CheckedTarget = actualTarget ?? target,
                     Status = status,
-
-                    StartedAtUtc =
-                        includeTimestamps ? now : null,
-
-                    CompletedAtUtc =
-                        includeTimestamps ? now : null
-                };
-
-                return Task.FromResult(result);
+                    StartedAtUtc = withTimestamps ? now : null,
+                    CompletedAtUtc = withTimestamps ? now : null
+                });
             });
     }
 
-    private static BlacklistCheckResult CreateResult(
-        string blacklistId,
-        string target,
-        BlacklistCheckStatus status)
+    private static BlacklistCheckResult Result(
+        string id, string target, BlacklistCheckStatus status)
     {
         var now = DateTimeOffset.UtcNow;
 
         return new BlacklistCheckResult
         {
-            BlacklistId = blacklistId,
+            BlacklistId = id,
             CheckedTarget = target,
             Status = status,
             StartedAtUtc = now,
@@ -817,13 +759,32 @@ internal static class Program
         };
     }
 
-    private static async Task ExpectExceptionAsync<TException>(
-        Func<Task> operation)
+    private static DnsBlacklistProfile CreateTestProfile()
+    {
+        return new DnsBlacklistProfile(
+            BlacklistId: "test-dnsbl",
+            DnsZone: "test.example",
+            ListedReturnCodes: new[] { "127.0.0.2" },
+            AccessDeniedReturnCodes: new[] { "127.255.255.254" },
+            PositiveControlAddress: "127.0.0.2",
+            NegativeControlAddress: "127.0.0.1");
+    }
+
+    private static DnsBlacklistDnsResponse Addresses(
+        params string[] values)
+    {
+        return new DnsBlacklistDnsResponse(
+            false,
+            values.Select(IPAddress.Parse).ToArray());
+    }
+
+    private static async Task ExpectAsync<TException>(
+        Func<Task> action)
         where TException : Exception
     {
         try
         {
-            await operation();
+            await action();
         }
         catch (TException)
         {
@@ -831,83 +792,62 @@ internal static class Program
         }
 
         throw new InvalidOperationException(
-            $"Die erwartete Ausnahme " +
-            $"{typeof(TException).Name} wurde nicht ausgelöst.");
+            $"Erwartete Ausnahme {typeof(TException).Name} fehlt.");
     }
 
-    private static DnsBlacklistProfile CreateProfile()
-    {
-        return new DnsBlacklistProfile(
-            BlacklistId: "test-dnsbl",
-            DnsZone: "test.example",
-            ListedReturnCodes:
-                new[] { "127.0.0.2" },
-            AccessDeniedReturnCodes:
-                new[] { "127.255.255.254" },
-            PositiveControlAddress: "127.0.0.2",
-            NegativeControlAddress: "127.0.0.1");
-    }
-
-    private static DnsBlacklistDnsResponse Addresses(
-        params string[] addresses)
-    {
-        return new DnsBlacklistDnsResponse(
-            IsNxDomain: false,
-            Addresses: addresses
-                .Select(IPAddress.Parse)
-                .ToArray());
-    }
-
-    private static void Assert(
-        bool condition,
-        string message)
+    private static void Assert(bool condition, string message)
     {
         if (!condition)
-        {
             throw new InvalidOperationException(message);
-        }
     }
 
     private sealed record Scenario(
         string Name,
-        DnsBlacklistDnsResponse? PositiveResponse,
-        DnsBlacklistDnsResponse? NegativeResponse,
-        DnsBlacklistDnsResponse? TargetResponse,
-        BlacklistCheckStatus ExpectedStatus,
-        bool? ExpectedIsListed,
-        int ExpectedQueryCount);
+        DnsBlacklistDnsResponse? Positive,
+        DnsBlacklistDnsResponse? Negative,
+        DnsBlacklistDnsResponse? Target,
+        BlacklistCheckStatus Status,
+        bool? IsListed,
+        int QueryCount);
 
-    private sealed class FakeDnsResolver
-        : IDnsBlacklistResolver
+    private sealed record ProfileExpectation(
+        string Id,
+        string Zone,
+        string PositiveCode);
+
+    private enum ProfileTestMode
+    {
+        NotListed,
+        Listed,
+        Unknown,
+        FailedControl
+    }
+
+    private sealed class FakeResolver : IDnsBlacklistResolver
     {
         private readonly
-            IReadOnlyDictionary<string, DnsBlacklistDnsResponse>
-                _answers;
+            IReadOnlyDictionary<string, DnsBlacklistDnsResponse> _answers;
 
         public List<string> Queries { get; } = new();
 
-        public FakeDnsResolver(
-            IReadOnlyDictionary<
-                string,
-                DnsBlacklistDnsResponse> answers)
+        public FakeResolver(
+            IReadOnlyDictionary<string, DnsBlacklistDnsResponse> answers)
         {
             _answers = answers;
         }
 
         public Task<DnsBlacklistDnsResponse> QueryAsync(
-            string queryName,
+            string name,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            Queries.Add(queryName);
+            Queries.Add(name);
 
-            if (!_answers.TryGetValue(
-                    queryName,
-                    out var answer))
+            if (!_answers.TryGetValue(name, out var answer))
             {
                 throw new InvalidOperationException(
-                    $"Keine simulierte DNS-Antwort für {queryName} vorhanden.");
+                    $"Simulierte DNS-Antwort fehlt: {name}");
             }
 
             return Task.FromResult(answer);

@@ -3,8 +3,6 @@ namespace Telenec.Mail.Statistics.Server.Reputation;
 
 /// <summary>
 /// Fachliche Kategorie einer Reputationsquelle.
-/// Unclassified bedeutet, dass die Abfrageart noch
-/// nicht abschließend verifiziert wurde.
 /// </summary>
 public enum BlacklistTargetKind
 {
@@ -15,11 +13,13 @@ public enum BlacklistTargetKind
 }
 
 /// <summary>
-/// Technischer und rechtlicher Integrationsstatus.
+/// Technischer und rechtlicher Zugangsstatus.
 ///
-/// Wichtig:
-/// Dieser Status beschreibt nicht, ob eine IP
-/// oder Domain auf einer Blacklist steht.
+/// Dieser Status sagt nicht aus, ob eine
+/// Quelle bereits im Monitoring integriert ist.
+///
+/// Die tatsächliche Integration ergibt sich
+/// ausschließlich aus registrierten Prüfergebnissen.
 /// </summary>
 public enum BlacklistAccessStatus
 {
@@ -30,10 +30,7 @@ public enum BlacklistAccessStatus
 }
 
 /// <summary>
-/// Stammdatensatz einer Reputationsquelle.
-///
-/// Es handelt sich ausschließlich um Metadaten.
-/// Ein aktuelles Prüfergebnis wird hier nicht gespeichert.
+/// Stammdaten einer Reputationsquelle.
 /// </summary>
 public sealed record BlacklistDefinition(
     string Id,
@@ -47,16 +44,11 @@ public sealed record BlacklistDefinition(
 /// Referenzkatalog der 68 MXToolbox-Einträge
 /// aus der Bestandsaufnahme vom 05.11.2026.
 ///
-/// Der Katalog dient als vollständige Soll-Liste.
+/// Der Katalog selbst führt keine Abfragen aus.
 ///
-/// Nicht klassifizierte Einträge dürfen nicht
-/// automatisch abgefragt werden.
-///
-/// Die Freigabe einer technischen Abfrage erfolgt
-/// erst nach Prüfung der jeweiligen Anbieterbedingungen.
-///
-/// Der Katalog selbst führt keine DNS- oder
-/// HTTP-Anfragen aus.
+/// Eine Quelle wird nur dann als integriert
+/// angezeigt, wenn der Monitoring-Dienst
+/// tatsächlich ein Prüfergebnis liefert.
 /// </summary>
 public static class BlacklistCatalog
 {
@@ -71,9 +63,8 @@ public static class BlacklistCatalog
 
             new("sem-urired", "SEM URIRED"),
 
-            // SORBS wurde am 05.06.2024 eingestellt.
-            // Die historischen Einträge bleiben erhalten,
-            // dürfen aber nicht als aktive Prüfungen gelten.
+            // Historische SORBS-Einträge.
+            // Der Betrieb wurde 2024 eingestellt.
 
             new(
                 "sorbs-rhsbl-badconf",
@@ -87,9 +78,8 @@ public static class BlacklistCatalog
                 BlacklistTargetKind.Domain,
                 BlacklistAccessStatus.Discontinued),
 
-            // Spamhaus DBL ist eine Domain-Reputationsliste.
-            // Kommerzielle Verwendung benötigt einen
-            // geeigneten Zugang des Anbieters.
+            // Kommerzielle Nutzung nur mit
+            // entsprechendem Anbieterzugang.
 
             new(
                 "spamhaus-dbl",
@@ -97,21 +87,26 @@ public static class BlacklistCatalog
                 BlacklistTargetKind.Domain,
                 BlacklistAccessStatus.RequiresProviderAuthorization),
 
-            // SURBL prüft insbesondere Domains,
-            // die als Ressourcen in Nachrichten-URIs
-            // vorkommen.
-            // Für unsere professionelle Einbindung
-            // ist eine entsprechende Freigabe erforderlich.
-
             new(
                 "surbl-multi",
                 "SURBL multi",
                 BlacklistTargetKind.Uri,
                 BlacklistAccessStatus.RequiresProviderAuthorization),
 
-            new("0spam", "0SPAM"),
+            // Erste aktive DNSBL-Anbietergruppe.
+            // Kommerzielle DNSBL-Nutzung erlaubt.
 
-            new("0spam-rbl", "0SPAM RBL"),
+            new(
+                "0spam",
+                "0SPAM",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
+
+            new(
+                "0spam-rbl",
+                "0SPAM RBL",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
 
             new(
                 "abusix-mail-intelligence-blacklist",
@@ -143,7 +138,20 @@ public static class BlacklistCatalog
 
             new("drmx", "DRMX"),
 
-            new("drone-bl", "DRONE BL"),
+            // DroneBL:
+            // Kommerzielle Nutzung erlaubt.
+            //
+            // Technisch vorbereitet, derzeit
+            // aber NICHT im Monitoring registriert.
+            //
+            // Die lokale Windows-DNS-Auflösung
+            // muss vor einer Aktivierung geklärt werden.
+
+            new(
+                "drone-bl",
+                "DRONE BL",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
 
             new("fabelsources", "FABELSOURCES"),
 
@@ -189,9 +197,7 @@ public static class BlacklistCatalog
 
             new("nosolicitado", "NoSolicitado"),
 
-            // PSBL ist eine IP-Reputationsliste.
-            // Der Anbieter erlaubt ausdrücklich
-            // die freie Verwendung der Liste.
+            // Bisheriger produktiver PSBL-Prüfer.
 
             new(
                 "psbl",
@@ -221,9 +227,10 @@ public static class BlacklistCatalog
 
             new("servicesnet", "SERVICESNET"),
 
-            // SpamCop dokumentiert IP-basierte DNSBL-Abfragen.
-            // Die kommerzielle Nutzung unseres
-            // konkreten Monitorings ist noch zu prüfen.
+            // SpamCop:
+            // IP-DNSBL ist dokumentiert.
+            // Nutzungsfreigabe für Telenec
+            // noch nicht abschließend geprüft.
 
             new(
                 "spamcop",
@@ -231,9 +238,8 @@ public static class BlacklistCatalog
                 BlacklistTargetKind.IpAddress,
                 BlacklistAccessStatus.NotReviewed),
 
-            // Spamhaus ZEN ist eine IP-Reputationsliste.
-            // Für Telenecs kommerzielle Verwendung
-            // benötigen wir einen geeigneten Zugang.
+            // Spamhaus ZEN:
+            // Geeigneter kommerzieller Zugang erforderlich.
 
             new(
                 "spamhaus-zen",
@@ -251,11 +257,31 @@ public static class BlacklistCatalog
 
             new("truncate", "TRUNCATE"),
 
-            new("uceprotectl1", "UCEPROTECTL1"),
+            // UCEPROTECT:
+            // Kostenlose private und kommerzielle
+            // Nutzung laut Betreiber erlaubt.
+            //
+            // Level 1 ist bereits integriert.
+            // Level 2 und 3 bleiben getrennte,
+            // noch nicht aktivierte Quellen.
 
-            new("uceprotectl2", "UCEPROTECTL2"),
+            new(
+                "uceprotectl1",
+                "UCEPROTECTL1",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
 
-            new("uceprotectl3", "UCEPROTECTL3"),
+            new(
+                "uceprotectl2",
+                "UCEPROTECTL2",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
+
+            new(
+                "uceprotectl3",
+                "UCEPROTECTL3",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
 
             new(
                 "woodys-smtp-blacklist",
@@ -263,10 +289,12 @@ public static class BlacklistCatalog
 
             new("zapbl", "ZapBL"),
 
-            // MXToolbox meldete für diese Liste
-            // bei der Bestandsaufnahme einen Timeout.
-            // Das ist kein Beleg für eine Listung
-            // und auch kein Freigabenachweis.
+            // MXToolbox meldete für diese Quelle
+            // bei der ursprünglichen Bestandsaufnahme
+            // einen Timeout.
+            //
+            // Es liegt noch kein belastbarer
+            // eigener Prüfstatus vor.
 
             new("spfbl-dnsbl", "SPFBL DNSBL")
         });

@@ -25,11 +25,11 @@ public static class AdminEndpoints
         /*
          * Geschützter Reputation-Endpoint.
          *
-         * Gibt den zuletzt gespeicherten
-         * Monitoring-Zustand zurück.
+         * Liefert den aktuellen Monitoring-Snapshot
+         * sowie die vollständige Blacklist-Übersicht.
          *
-         * Ein API-Aufruf löst keine zusätzliche
-         * DNS- oder Blacklist-Abfrage aus.
+         * Der API-Aufruf führt selbst keine DNS-
+         * oder Blacklist-Abfragen durch.
          */
         endpoints.MapGet(
             "/api/v1/admin/reputation",
@@ -75,17 +75,28 @@ public static class AdminEndpoints
     ///
     /// Der Endpoint ist ausschließlich lesend.
     ///
-    /// Der Blacklist-Status wird ausdrücklich als
-    /// sprechender Zeichenfolgenwert zurückgegeben.
+    /// Die bisherige API-Antwort bleibt kompatibel.
+    /// Zusätzlich wird eine vollständige Übersicht
+    /// aus dem BlacklistCatalog bereitgestellt.
     ///
-    /// Dadurch ist die API nicht von den numerischen
-    /// Enum-Werten des Servers abhängig.
+    /// Die Übersicht enthält derzeit:
+    ///
+    /// - 68 Referenzlisten
+    /// - 1 integrierte Liste (PSBL)
+    /// - 67 noch nicht integrierte Listen
+    ///
+    /// Nur tatsächlich vorhandene Monitoring-Ergebnisse
+    /// werden als durchgeführte Prüfungen dargestellt.
     /// </summary>
     private static IResult HandleReputation(
         HttpRequest request,
         IAdminApiKeyValidator apiKeyValidator,
         BlacklistMonitoringService monitoringService)
     {
+        /*
+         * Authentifizierung erfolgt vor
+         * dem Zugriff auf Monitoring-Daten.
+         */
         var providedApiKey =
             request.Headers[AdminApiKeyHeaderName]
                 .FirstOrDefault();
@@ -95,21 +106,62 @@ public static class AdminEndpoints
             return Results.Unauthorized();
         }
 
+        /*
+         * Atomar veröffentlichten Snapshot lesen.
+         *
+         * Diese Operation führt keine externe
+         * Blacklist-Abfrage aus.
+         */
         var snapshot =
             monitoringService.GetSnapshot();
 
         /*
-         * Expliziter API-Vertrag.
+         * Aktuell steht das Ergebnis des
+         * PSBL-Monitorings zur Verfügung.
          *
-         * Die bestehende Snapshot-Struktur
-         * wird beibehalten.
+         * Die Dictionary-Struktur ermöglicht es,
+         * künftig mehrere Prüfergebnisse an
+         * die OverviewFactory zu übergeben.
          *
-         * Lediglich der Status wird von einem
-         * numerischen Enum in einen stabilen
-         * Namen umgewandelt.
+         * Die Erweiterung des Monitoring-Dienstes
+         * erfolgt in einem späteren Sprint.
+         */
+        IReadOnlyDictionary<string, BlacklistCheckResult>
+            latestResults =
+                new Dictionary<string, BlacklistCheckResult>(
+                    StringComparer.Ordinal)
+                {
+                    [snapshot.Result.BlacklistId] =
+                        snapshot.Result
+                };
+
+        /*
+         * Vollständige Blacklist-Übersicht
+         * aus dem Referenzkatalog erzeugen.
          *
-         * Die übrigen Felder behalten ihre
-         * bisherigen Datentypen.
+         * Nicht integrierte Einträge erhalten
+         * ausschließlich den fachlichen
+         * Status "NotIntegrated".
+         */
+        var overview =
+            BlacklistOverviewFactory.Create(
+                latestResults);
+
+        /*
+         * Rückwärtskompatibler API-Vertrag.
+         *
+         * Alle bisherigen Felder bleiben erhalten.
+         * Insbesondere bleibt "result" weiterhin
+         * das einzelne PSBL-Prüfergebnis.
+         *
+         * Das neue Feld "overview" ergänzt
+         * die Antwort um die vollständige
+         * dynamische Blacklist-Übersicht.
+         *
+         * Der WPF-Client kann damit später
+         * beliebig viele Blacklist-Einträge
+         * darstellen, ohne eine feste Liste
+         * im Client hinterlegen zu müssen.
          */
         var response = new
         {
@@ -143,7 +195,9 @@ public static class AdminEndpoints
                 snapshot.Result.IsConclusive,
 
                 snapshot.Result.IsListed
-            }
+            },
+
+            Overview = overview
         };
 
         return Results.Ok(response);

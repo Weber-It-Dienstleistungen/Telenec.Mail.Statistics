@@ -2,23 +2,22 @@
 namespace Telenec.Mail.Statistics.Admin.Models;
 
 /// <summary>
-/// Datenmodell für die Antwort des geschützten
-/// Reputation-Endpunkts.
+/// Antwort des geschützten Reputation-Endpunkts.
 ///
 /// API:
 /// GET /api/v1/admin/reputation
 ///
-/// Dieses Modell enthält den aktuellen
-/// serverseitigen Monitoring-Snapshot.
+/// Enthält den aktuellen Monitoring-Zustand
+/// sowie optional die vollständige
+/// Blacklist-Übersicht.
 ///
 /// Die WPF-Anwendung führt selbst keine
-/// Blacklist-Abfragen aus.
+/// externen Blacklist-Prüfungen aus.
 /// </summary>
 public sealed record ReputationMonitoringResponse
 {
     /// <summary>
-    /// Überwachter Mailserver-Hostname.
-    /// Beispiel: mail.necnet.de
+    /// Überwachter Mailserver.
     /// </summary>
     public string Hostname { get; init; } = string.Empty;
 
@@ -28,7 +27,7 @@ public sealed record ReputationMonitoringResponse
     public string ExpectedIpv4 { get; init; } = string.Empty;
 
     /// <summary>
-    /// Zuletzt über DNS ermittelte IPv4-Adressen.
+    /// Zuletzt ermittelte IPv4-Adressen.
     /// </summary>
     public IReadOnlyList<string> ResolvedIpv4Addresses
     {
@@ -37,19 +36,12 @@ public sealed record ReputationMonitoringResponse
     } = Array.Empty<string>();
 
     /// <summary>
-    /// Zeitpunkt des letzten Prüfversuchs in UTC.
-    ///
-    /// Null bedeutet, dass noch keine
-    /// Prüfung stattgefunden hat.
+    /// Letzter Prüfversuch in UTC.
     /// </summary>
     public DateTimeOffset? LastAttemptUtc { get; init; }
 
     /// <summary>
-    /// Zeitpunkt der letzten erfolgreich
-    /// interpretierten Blacklist-Prüfung.
-    ///
-    /// Fehlgeschlagene Prüfungen verändern
-    /// diesen Wert nicht.
+    /// Letzte erfolgreiche Prüfung in UTC.
     /// </summary>
     public DateTimeOffset? LastSuccessfulCheckUtc
     {
@@ -58,44 +50,51 @@ public sealed record ReputationMonitoringResponse
     }
 
     /// <summary>
-    /// Ergebnis des aktuellen PSBL-Prüflaufs.
+    /// Bisheriges Einzelprüfergebnis.
     ///
-    /// In späteren Ausbaustufen wird dieses
-    /// Einzelmodell durch eine Sammlung von
-    /// Prüfergebnissen ergänzt.
+    /// Bleibt aus Gründen der
+    /// Rückwärtskompatibilität erhalten.
+    ///
+    /// Aktuell enthält es das PSBL-Ergebnis.
     /// </summary>
     public ReputationCheckResponse Result
     {
         get;
         init;
     } = new();
+
+    /// <summary>
+    /// Neue dynamische Blacklist-Übersicht.
+    ///
+    /// Null bedeutet, dass der Server
+    /// diese Erweiterung noch nicht anbietet.
+    ///
+    /// Dadurch bleiben ältere Serverversionen
+    /// mit dem WPF-Client kompatibel.
+    /// </summary>
+    public ReputationOverviewResponse? Overview
+    {
+        get;
+        init;
+    }
 }
 
 /// <summary>
-/// Ergebnis einer einzelnen Blacklist-Prüfung.
+/// Bestehendes Einzelprüfergebnis.
 ///
-/// Das Modell verwendet bewusst Zeichenfolgen
-/// für den Status, damit der Client nicht von
-/// numerischen Enum-Werten des Servers abhängt.
+/// Dieses Modell wird weiterhin für
+/// die bisherige PSBL-Anzeige verwendet.
 /// </summary>
 public sealed record ReputationCheckResponse
 {
-    /// <summary>
-    /// Kennung der Prüfliste.
-    /// Beispiel: psbl
-    /// </summary>
-    public string BlacklistId { get; init; } = string.Empty;
+    public string BlacklistId { get; init; } =
+        string.Empty;
+
+    public string CheckedTarget { get; init; } =
+        string.Empty;
 
     /// <summary>
-    /// Tatsächlich geprüftes Ziel.
-    /// Beispiel: 80.79.237.70
-    /// </summary>
-    public string CheckedTarget { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Fachlicher Status als Zeichenfolge.
-    ///
-    /// Aktuell mögliche Werte:
+    /// Fachlicher Prüfstatus als Zeichenfolge.
     ///
     /// NotChecked
     /// NotListed
@@ -103,51 +102,181 @@ public sealed record ReputationCheckResponse
     /// Failed
     /// AccessDenied
     /// Unknown
-    ///
-    /// Unbekannte zukünftige Statuswerte
-    /// können als Zeichenfolge eingelesen
-    /// und später gesondert behandelt werden.
     /// </summary>
-    public string Status { get; init; } = "NotChecked";
+    public string Status { get; init; } =
+        "NotChecked";
 
-    /// <summary>
-    /// Beginn der Prüfung in UTC.
-    /// </summary>
     public DateTimeOffset? StartedAtUtc { get; init; }
 
-    /// <summary>
-    /// Abschluss der Prüfung in UTC.
-    /// </summary>
     public DateTimeOffset? CompletedAtUtc { get; init; }
 
-    /// <summary>
-    /// Technische Antwort des Anbieters.
-    ///
-    /// Beispiel: NXDOMAIN
-    /// </summary>
     public string? ProviderResponse { get; init; }
 
-    /// <summary>
-    /// Optionale Fehlermeldung bei einer
-    /// nicht erfolgreich abgeschlossenen Prüfung.
-    /// </summary>
     public string? ErrorMessage { get; init; }
 
-    /// <summary>
-    /// Gibt an, ob das Prüfergebnis
-    /// fachlich eindeutig ist.
-    /// </summary>
     public bool IsConclusive { get; init; }
 
     /// <summary>
-    /// Tatsächlicher Listungszustand.
-    ///
     /// true  = gelistet
     /// false = nicht gelistet
-    /// null  = keine verlässliche Aussage
+    /// null  = unbekannt
+    /// </summary>
+    public bool? IsListed { get; init; }
+}
+
+/// <summary>
+/// Vollständige Übersicht aller
+/// vom Statistikserver gelieferten
+/// Blacklist-Referenzeinträge.
+///
+/// Die Anzahl der Listen wird ausschließlich
+/// vom Server bestimmt.
+///
+/// Der Client verwendet keine eigene,
+/// fest hinterlegte Blacklist-Soll-Liste.
+/// </summary>
+public sealed record ReputationOverviewResponse
+{
+    /// <summary>
+    /// Gesamtzahl der Referenzlisten.
+    /// </summary>
+    public int TotalCount { get; init; }
+
+    /// <summary>
+    /// Anzahl der technisch integrierten Listen.
     ///
-    /// Null darf niemals als False
-    /// interpretiert werden.
+    /// Eine integrierte Liste muss noch kein
+    /// erfolgreiches Prüfergebnis besitzen.
+    /// </summary>
+    public int IntegratedCount { get; init; }
+
+    /// <summary>
+    /// Anzahl der nicht integrierten Listen.
+    /// </summary>
+    public int NotIntegratedCount { get; init; }
+
+    /// <summary>
+    /// Integriert, aber noch nicht geprüft.
+    /// </summary>
+    public int NotCheckedCount { get; init; }
+
+    /// <summary>
+    /// Erfolgreich geprüft und nicht gelistet.
+    /// </summary>
+    public int NotListedCount { get; init; }
+
+    /// <summary>
+    /// Erfolgreich geprüft und gelistet.
+    /// </summary>
+    public int ListedCount { get; init; }
+
+    /// <summary>
+    /// Fehlgeschlagene oder nicht eindeutig
+    /// interpretierbare Prüfungen.
+    /// </summary>
+    public int WarningCount { get; init; }
+
+    /// <summary>
+    /// Dynamische Liste aller Einträge.
+    ///
+    /// Die Reihenfolge wird vom
+    /// Statistikserver vorgegeben.
+    /// </summary>
+    public IReadOnlyList<ReputationBlacklistEntryResponse> Entries
+    {
+        get;
+        init;
+    } = Array.Empty<ReputationBlacklistEntryResponse>();
+}
+
+/// <summary>
+/// Ein einzelner Eintrag der dynamischen
+/// Blacklist-Übersicht.
+///
+/// Enthält sowohl die Stammdaten der
+/// Reputationsquelle als auch das
+/// gegebenenfalls vorhandene Prüfergebnis.
+/// </summary>
+public sealed record ReputationBlacklistEntryResponse
+{
+    /// <summary>
+    /// Eindeutige Katalogkennung.
+    /// Beispiel: psbl
+    /// </summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Anzeigename in der Oberfläche.
+    /// Beispiel: PSBL
+    /// </summary>
+    public string DisplayName { get; init; } =
+        string.Empty;
+
+    /// <summary>
+    /// Art des Prüfgegenstands.
+    ///
+    /// Unclassified
+    /// IpAddress
+    /// Domain
+    /// Uri
+    /// </summary>
+    public string TargetKind { get; init; } =
+        "Unclassified";
+
+    /// <summary>
+    /// Integrations- und Zugriffsstatus.
+    ///
+    /// NotReviewed
+    /// Permitted
+    /// RequiresProviderAuthorization
+    /// Discontinued
+    ///
+    /// Dies ist kein Blacklist-Prüfergebnis.
+    /// </summary>
+    public string AccessStatus { get; init; } =
+        "NotReviewed";
+
+    /// <summary>
+    /// Fachlicher Status.
+    ///
+    /// NotIntegrated
+    /// NotChecked
+    /// NotListed
+    /// Listed
+    /// Failed
+    /// AccessDenied
+    /// Unknown
+    ///
+    /// Die spätere Oberfläche verwendet
+    /// diesen Wert zur Statusdarstellung.
+    /// </summary>
+    public string Status { get; init; } =
+        "NotIntegrated";
+
+    /// <summary>
+    /// Tatsächlich geprüftes Ziel.
+    ///
+    /// Null bei nicht integrierten Einträgen.
+    /// </summary>
+    public string? CheckedTarget { get; init; }
+
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    public DateTimeOffset? CompletedAtUtc { get; init; }
+
+    public string? ProviderResponse { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public bool IsConclusive { get; init; }
+
+    /// <summary>
+    /// true  = gelistet
+    /// false = nicht gelistet
+    /// null  = kein verlässliches Ergebnis
+    ///
+    /// Null darf nicht als "nicht gelistet"
+    /// dargestellt werden.
     /// </summary>
     public bool? IsListed { get; init; }
 }

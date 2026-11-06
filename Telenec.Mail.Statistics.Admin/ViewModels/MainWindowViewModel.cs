@@ -33,51 +33,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string ApplicationVersionText =>
         $"Telenec Mail · {GetApplicationVersion()}";
 
-    /*
-     * Bestehende Statistikberechnungen.
-     *
-     * Diese bleiben unverändert.
-     */
+    // Bestehende Statistikberechnungen.
 
     public double ActiveTodayPercentage =>
-        GetPercentage(
-            ActiveToday,
-            TotalInstallations);
+        GetPercentage(ActiveToday, TotalInstallations);
 
     public double ActiveLast7DaysPercentage =>
-        GetPercentage(
-            ActiveLast7Days,
-            TotalInstallations);
+        GetPercentage(ActiveLast7Days, TotalInstallations);
 
     public double ActiveLast30DaysPercentage =>
-        GetPercentage(
-            ActiveLast30Days,
-            TotalInstallations);
+        GetPercentage(ActiveLast30Days, TotalInstallations);
 
     public double InactiveOver30DaysPercentage =>
-        GetPercentage(
-            InactiveOver30Days,
-            TotalInstallations);
+        GetPercentage(InactiveOver30Days, TotalInstallations);
 
     public int ActiveDays1To7 =>
-        Math.Max(
-            0,
-            ActiveLast7Days - ActiveToday);
+        Math.Max(0, ActiveLast7Days - ActiveToday);
 
     public int ActiveDays8To30 =>
-        Math.Max(
-            0,
-            ActiveLast30Days - ActiveLast7Days);
+        Math.Max(0, ActiveLast30Days - ActiveLast7Days);
 
     public double ActiveDays1To7Percentage =>
-        GetPercentage(
-            ActiveDays1To7,
-            TotalInstallations);
+        GetPercentage(ActiveDays1To7, TotalInstallations);
 
     public double ActiveDays8To30Percentage =>
-        GetPercentage(
-            ActiveDays8To30,
-            TotalInstallations);
+        GetPercentage(ActiveDays8To30, TotalInstallations);
 
     public string ActiveTodayChartText =>
         FormatChartValue(
@@ -109,9 +89,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ActiveDays8To30,
             ActiveDays8To30Percentage);
 
-    /*
-     * Bestehende Eigenschaften der Nutzungsstatistik.
-     */
+    // Bestehende Nutzungsstatistik.
 
     [ObservableProperty]
     private string statusText =
@@ -139,20 +117,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private int inactiveOver30Days;
 
-    /*
-     * Neue Eigenschaften für die Mailserver-Reputation.
-     *
-     * Die Darstellung wird im folgenden Sprint
-     * mit diesen Eigenschaften verbunden.
-     *
-     * Aktuell ist ausschließlich PSBL angebunden.
-     */
+    // Bestehende Reputationsanzeige.
 
     public string ReputationTitle =>
         "Mailserver-Reputation";
-
-    public string ReputationScopeText =>
-        "1 von 68 Referenzlisten angebunden – PSBL";
 
     [ObservableProperty]
     private bool isReputationLoading;
@@ -197,50 +165,46 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string reputationDetailText =
         "Die Überwachung wird geladen.";
 
-    /*
-     * Gemeinsamer Ladeeinstieg.
-     *
-     * MainWindow.xaml.cs verwendet bereits LoadAsync.
-     * Eine Anpassung des Code-behind ist nicht nötig.
-     */
+    // Dynamische Blacklist-Übersicht.
+    //
+    // Keine fest hinterlegten Listennamen.
+    // Der Server bestimmt Umfang und Inhalt.
+
+    [ObservableProperty]
+    private string reputationScopeText =
+        "Prüfumfang wird geladen …";
+
+    [ObservableProperty]
+    private string reputationSummaryText =
+        "Noch keine Übersicht geladen.";
+
+    [ObservableProperty]
+    private bool isReputationOverviewAvailable;
+
+    [ObservableProperty]
+    private IReadOnlyList<ReputationBlacklistRow>
+        reputationEntries =
+            Array.Empty<ReputationBlacklistRow>();
+
+    // Die bestehenden Einstiegs- und
+    // Aktualisierungsfunktionen bleiben erhalten.
 
     public async Task LoadAsync(
         CancellationToken cancellationToken = default)
     {
-        await RefreshAsync(
-            cancellationToken);
+        await RefreshAsync(cancellationToken);
     }
-
-    /*
-     * Gemeinsame Aktualisierung.
-     *
-     * Die beiden Datenbereiche werden unabhängig
-     * voneinander geladen.
-     *
-     * Ein Fehler der Reputationsabfrage
-     * verändert niemals die Statistikkennzahlen.
-     *
-     * Der vorhandene Aktualisieren-Button
-     * verwendet weiterhin RefreshCommand.
-     */
 
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task RefreshAsync(
         CancellationToken cancellationToken)
     {
-        await LoadStatisticsAsync(
-            cancellationToken);
+        await LoadStatisticsAsync(cancellationToken);
 
-        await LoadReputationAsync(
-            cancellationToken);
+        await LoadReputationAsync(cancellationToken);
     }
 
-    /*
-     * Bestehende Nutzungsstatistik.
-     *
-     * Die bisherige Lade- und Fehlerbehandlung
-     * bleibt fachlich unverändert.
-     */
+    // Bestehende Nutzungsstatistik.
 
     private async Task LoadStatisticsAsync(
         CancellationToken cancellationToken)
@@ -281,24 +245,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
         catch (UnauthorizedAccessException)
         {
             StatusKind = "Error";
+
             StatusText =
                 "Zugriff verweigert – der Admin-API-Schlüssel wurde abgelehnt.";
         }
         catch (HttpRequestException)
         {
             StatusKind = "Error";
+
             StatusText =
                 "Statistikserver ist derzeit nicht erreichbar.";
         }
         catch (TaskCanceledException)
         {
             StatusKind = "Warning";
+
             StatusText =
                 "Die Anfrage an den Statistikserver hat zu lange gedauert.";
         }
         catch (Exception)
         {
             StatusKind = "Error";
+
             StatusText =
                 "Die Statistikdaten konnten nicht geladen werden.";
         }
@@ -308,54 +276,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /*
-     * Neue Reputationsabfrage.
-     *
-     * Dieser Bereich besitzt eine eigene
-     * Status- und Fehlerverwaltung.
-     *
-     * Dadurch bleiben die bestehenden
-     * Nutzungsstatistikdaten unabhängig.
-     */
+    // Reputationsabfrage.
+    //
+    // Dieser Bereich wird unabhängig von
+    // der Nutzungsstatistik behandelt.
 
     private async Task LoadReputationAsync(
         CancellationToken cancellationToken)
     {
         IsReputationLoading = true;
 
-        /*
-         * Frühere Ergebnisse werden zunächst
-         * zurückgesetzt.
-         *
-         * Dadurch darf beispielsweise ein
-         * früherer grüner Status nicht stehen
-         * bleiben, wenn der aktuelle Abruf
-         * fehlschlägt.
-         */
-
-        ReputationStatusKind = "Loading";
-
-        ReputationStatusText =
-            "Reputationsdaten werden geladen …";
-
-        ReputationHostname = "Nicht verfügbar";
-        ReputationIpAddress = "Nicht verfügbar";
-
-        ReputationResolvedAddresses =
-            "Nicht verfügbar";
-
-        ReputationBlacklistName = "PSBL";
-
-        ReputationLastAttemptText =
-            "Nicht verfügbar";
-
-        ReputationLastSuccessfulCheckText =
-            "Nicht verfügbar";
-
-        ReputationProviderResponse = "Keine";
-
-        ReputationDetailText =
-            "Aktueller Monitoring-Zustand wird abgerufen.";
+        ResetReputationDisplay();
 
         try
         {
@@ -364,8 +295,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     .GetReputationAsync(
                         cancellationToken);
 
-            ApplyReputation(
-                reputation);
+            ApplyReputation(reputation);
         }
         catch (UnauthorizedAccessException)
         {
@@ -416,14 +346,52 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Übernimmt einen gültig empfangenen
-    /// Monitoring-Snapshot in die Eigenschaften
-    /// der WPF-Oberfläche.
-    ///
-    /// Der Listungsstatus wird ausdrücklich
-    /// nur für die geprüfte Einzelliste bewertet.
-    /// </summary>
+    private void ResetReputationDisplay()
+    {
+        ReputationStatusKind = "Loading";
+
+        ReputationStatusText =
+            "Reputationsdaten werden geladen …";
+
+        ReputationHostname = "Nicht verfügbar";
+        ReputationIpAddress = "Nicht verfügbar";
+
+        ReputationResolvedAddresses =
+            "Nicht verfügbar";
+
+        ReputationBlacklistName = "PSBL";
+
+        ReputationLastAttemptText =
+            "Nicht verfügbar";
+
+        ReputationLastSuccessfulCheckText =
+            "Nicht verfügbar";
+
+        ReputationProviderResponse = "Keine";
+
+        ReputationDetailText =
+            "Aktueller Monitoring-Zustand wird abgerufen.";
+
+        // Keine alten grünen Statussymbole
+        // während einer erneuten Abfrage anzeigen.
+
+        ReputationScopeText =
+            "Prüfumfang wird geladen …";
+
+        ReputationSummaryText =
+            "Noch keine Übersicht geladen.";
+
+        IsReputationOverviewAvailable = false;
+
+        ReputationEntries =
+            Array.Empty<ReputationBlacklistRow>();
+    }
+
+    // Bestehendes Einzelprüfergebnis übernehmen.
+    //
+    // Die PSBL-Anzeige bleibt kompatibel
+    // mit unserem bisherigen Serververtrag.
+
     private void ApplyReputation(
         ReputationMonitoringResponse reputation)
     {
@@ -444,12 +412,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             reputation.Result.BlacklistId;
 
         ReputationLastAttemptText =
-            FormatDate(
-                reputation.LastAttemptUtc);
+            FormatDate(reputation.LastAttemptUtc);
 
         ReputationLastSuccessfulCheckText =
-            FormatDate(
-                reputation.LastSuccessfulCheckUtc);
+            FormatDate(reputation.LastSuccessfulCheckUtc);
 
         ReputationProviderResponse =
             string.IsNullOrWhiteSpace(
@@ -458,14 +424,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 : reputation.Result.ProviderResponse;
 
         var result = reputation.Result;
-
-        /*
-         * Der Status und IsListed müssen
-         * fachlich zueinander passen.
-         *
-         * Widersprüchliche Angaben werden
-         * nicht als erfolgreich bewertet.
-         */
 
         switch (result.Status)
         {
@@ -480,7 +438,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 ReputationDetailText =
                     "Die geprüfte Versand-IP ist bei PSBL nicht gelistet. " +
-                    "Dies ist keine Aussage über die übrigen 67 Referenzlisten.";
+                    "Dies ist keine Aussage über andere Blacklists.";
 
                 break;
 
@@ -565,15 +523,232 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 break;
         }
+
+        // Zusätzlich die dynamische Übersicht
+        // aufbereiten, sofern sie vorhanden ist.
+
+        ApplyReputationOverview(reputation);
     }
 
-    /// <summary>
-    /// Setzt einen eigenen Fehlerzustand
-    /// für die Reputationsanzeige.
-    ///
-    /// Die Nutzungsstatistik wird dadurch
-    /// nicht beeinflusst.
-    /// </summary>
+    private void ApplyReputationOverview(
+        ReputationMonitoringResponse reputation)
+    {
+        var overview = reputation.Overview;
+
+        /*
+         * Rückwärtskompatibilität:
+         *
+         * Ein älterer Server kennt "overview"
+         * möglicherweise noch nicht.
+         *
+         * Wir zeigen dann das vorhandene
+         * Einzelprüfergebnis, behaupten aber
+         * keine vollständige Katalogabdeckung.
+         */
+
+        if (overview is null)
+        {
+            var result = reputation.Result;
+
+            var legacyEntry =
+                new ReputationBlacklistEntryResponse
+                {
+                    Id = result.BlacklistId,
+
+                    DisplayName =
+                        result.BlacklistId.ToUpperInvariant(),
+
+                    Status = result.Status,
+
+                    CheckedTarget = result.CheckedTarget,
+
+                    StartedAtUtc = result.StartedAtUtc,
+
+                    CompletedAtUtc = result.CompletedAtUtc,
+
+                    ProviderResponse = result.ProviderResponse,
+
+                    ErrorMessage = result.ErrorMessage,
+
+                    IsConclusive = result.IsConclusive,
+
+                    IsListed = result.IsListed
+                };
+
+            ReputationEntries =
+                new[]
+                {
+                    CreateBlacklistRow(legacyEntry)
+                };
+
+            ReputationScopeText =
+                "Einzelprüfung – vollständige Übersicht auf diesem Server noch nicht verfügbar";
+
+            ReputationSummaryText =
+                "Die Serverversion liefert noch keinen dynamischen Blacklist-Katalog.";
+
+            IsReputationOverviewAvailable = false;
+
+            return;
+        }
+
+        /*
+         * Grundlegende Validierung.
+         *
+         * Eine leere, beschädigte oder
+         * widersprüchliche Übersicht wird
+         * nicht als gültiger Katalog verwendet.
+         */
+
+        if (overview.Entries is null
+            || overview.TotalCount != overview.Entries.Count
+            || overview.TotalCount < 0
+            || overview.IntegratedCount < 0
+            || overview.NotIntegratedCount < 0
+            || overview.IntegratedCount
+               + overview.NotIntegratedCount
+               != overview.TotalCount)
+        {
+            throw new InvalidDataException(
+                "Die Blacklist-Übersicht enthält widersprüchliche Kennzahlen.");
+        }
+
+        if (overview.Entries.Any(entry =>
+                entry is null
+                || string.IsNullOrWhiteSpace(entry.Id)
+                || string.IsNullOrWhiteSpace(entry.DisplayName)
+                || string.IsNullOrWhiteSpace(entry.Status)))
+        {
+            throw new InvalidDataException(
+                "Die Blacklist-Übersicht enthält ungültige Einträge.");
+        }
+
+        if (overview.Entries
+            .Select(entry => entry.Id)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != overview.TotalCount)
+        {
+            throw new InvalidDataException(
+                "Die Blacklist-Übersicht enthält doppelte Kennungen.");
+        }
+
+        /*
+         * Jede Statuszeile wird aus den
+         * aktuellen Serverdaten erzeugt.
+         *
+         * Sortierung:
+         *
+         * 0 = gelistet
+         * 1 = Fehler / unbekannt
+         * 2 = integriert, noch nicht geprüft
+         * 3 = nicht gelistet
+         * 4 = nicht integriert
+         *
+         * PSBL bleibt damit sichtbar,
+         * auch wenn 67 graue Einträge folgen.
+         */
+
+        var rows =
+            overview.Entries
+                .Select(CreateBlacklistRow)
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(
+                    row => row.DisplayName,
+                    StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+
+        ReputationEntries =
+            Array.AsReadOnly(rows);
+
+        ReputationScopeText =
+            $"{overview.IntegratedCount} von {overview.TotalCount} Referenzlisten angebunden";
+
+        ReputationSummaryText =
+            $"{overview.NotListedCount} nicht gelistet · " +
+            $"{overview.ListedCount} gelistet · " +
+            $"{overview.WarningCount} Warnungen · " +
+            $"{overview.NotCheckedCount} ungeprüft · " +
+            $"{overview.NotIntegratedCount} nicht integriert";
+
+        IsReputationOverviewAvailable = true;
+    }
+
+    // Statuszuordnung für die kompakte Liste.
+    //
+    // Nur eindeutig erfolgreiche Ergebnisse
+    // erhalten grüne oder rote Symbole.
+    //
+    // Widersprüche und unbekannte Werte
+    // werden als Warnung gekennzeichnet.
+
+    private static ReputationBlacklistRow CreateBlacklistRow(
+        ReputationBlacklistEntryResponse entry)
+    {
+        var (
+            statusKind,
+            statusSymbol,
+            statusText,
+            sortOrder) = entry.Status switch
+            {
+                "Listed"
+                    when entry.IsConclusive
+                         && entry.IsListed == true
+                    => ("Error", "✖", "Gelistet", 0),
+
+                "NotListed"
+                    when entry.IsConclusive
+                         && entry.IsListed == false
+                    => ("Success", "✔", "Nicht gelistet", 3),
+
+                "NotIntegrated"
+                    => ("Neutral", "—", "Nicht integriert", 4),
+
+                "NotChecked"
+                    => ("Neutral", "—", "Noch nicht geprüft", 2),
+
+                "Failed"
+                    => ("Warning", "⚠", "Prüfung fehlgeschlagen", 1),
+
+                "AccessDenied"
+                    => ("Warning", "⚠", "Zugriff verweigert", 1),
+
+                "Unknown"
+                    => ("Warning", "⚠", "Ergebnis unbekannt", 1),
+
+                _
+                    => ("Warning", "⚠", "Widersprüchlicher oder unbekannter Status", 1)
+            };
+
+        var details =
+            $"{entry.DisplayName}\n" +
+            $"Status: {statusText}\n" +
+            $"Prüfziel: {entry.CheckedTarget ?? "Nicht vorhanden"}\n" +
+            $"Letzter Abschluss: {FormatDate(entry.CompletedAtUtc)}\n" +
+            $"Anbieterantwort: {entry.ProviderResponse ?? "Keine"}";
+
+        if (!string.IsNullOrWhiteSpace(entry.ErrorMessage))
+        {
+            details +=
+                $"\nFehler: {entry.ErrorMessage}";
+        }
+
+        return new ReputationBlacklistRow(
+            Id: entry.Id,
+            DisplayName: entry.DisplayName,
+            Status: entry.Status,
+            StatusKind: statusKind,
+            StatusSymbol: statusSymbol,
+            StatusText: statusText,
+            SortOrder: sortOrder,
+            CheckedTarget: entry.CheckedTarget,
+            CompletedAtText: FormatDate(entry.CompletedAtUtc),
+            ProviderResponse: entry.ProviderResponse,
+            ErrorMessage: entry.ErrorMessage,
+            TargetKind: entry.TargetKind,
+            AccessStatus: entry.AccessStatus,
+            DetailsText: details);
+    }
+
     private void SetReputationError(
         string status,
         string description)
@@ -581,6 +756,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ReputationStatusKind = "Error";
         ReputationStatusText = status;
         ReputationDetailText = description;
+
+        // Bei einem fehlgeschlagenen API-Abruf
+        // keine alten Prüfergebnisse anzeigen.
+
+        ReputationEntries =
+            Array.Empty<ReputationBlacklistRow>();
+
+        ReputationScopeText =
+            "Prüfumfang nicht verfügbar";
+
+        ReputationSummaryText =
+            "Blacklist-Übersicht konnte nicht geladen werden.";
+
+        IsReputationOverviewAvailable = false;
     }
 
     private static string GetErrorDescription(
@@ -592,10 +781,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
             : providerError;
     }
 
-    /// <summary>
-    /// UTC-Zeitpunkte werden für die Anzeige
-    /// in die lokale Zeitzone umgerechnet.
-    /// </summary>
     private static string FormatDate(
         DateTimeOffset? timestamp)
     {
@@ -609,54 +794,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .ToString("dd.MM.yyyy HH:mm:ss");
     }
 
-    /*
-     * Bestehende Benachrichtigungen
-     * für die Statistikdiagramme.
-     */
+    // Bestehende Diagramm-Benachrichtigungen.
 
     private void RaiseChartPropertiesChanged()
     {
-        OnPropertyChanged(
-            nameof(ActiveTodayPercentage));
+        OnPropertyChanged(nameof(ActiveTodayPercentage));
+        OnPropertyChanged(nameof(ActiveLast7DaysPercentage));
+        OnPropertyChanged(nameof(ActiveLast30DaysPercentage));
+        OnPropertyChanged(nameof(InactiveOver30DaysPercentage));
 
-        OnPropertyChanged(
-            nameof(ActiveLast7DaysPercentage));
+        OnPropertyChanged(nameof(ActiveDays1To7));
+        OnPropertyChanged(nameof(ActiveDays8To30));
 
-        OnPropertyChanged(
-            nameof(ActiveLast30DaysPercentage));
+        OnPropertyChanged(nameof(ActiveDays1To7Percentage));
+        OnPropertyChanged(nameof(ActiveDays8To30Percentage));
 
-        OnPropertyChanged(
-            nameof(InactiveOver30DaysPercentage));
+        OnPropertyChanged(nameof(ActiveTodayChartText));
+        OnPropertyChanged(nameof(ActiveLast7DaysChartText));
+        OnPropertyChanged(nameof(ActiveLast30DaysChartText));
+        OnPropertyChanged(nameof(InactiveOver30DaysChartText));
 
-        OnPropertyChanged(
-            nameof(ActiveDays1To7));
-
-        OnPropertyChanged(
-            nameof(ActiveDays8To30));
-
-        OnPropertyChanged(
-            nameof(ActiveDays1To7Percentage));
-
-        OnPropertyChanged(
-            nameof(ActiveDays8To30Percentage));
-
-        OnPropertyChanged(
-            nameof(ActiveTodayChartText));
-
-        OnPropertyChanged(
-            nameof(ActiveLast7DaysChartText));
-
-        OnPropertyChanged(
-            nameof(ActiveLast30DaysChartText));
-
-        OnPropertyChanged(
-            nameof(InactiveOver30DaysChartText));
-
-        OnPropertyChanged(
-            nameof(ActiveDays1To7ChartText));
-
-        OnPropertyChanged(
-            nameof(ActiveDays8To30ChartText));
+        OnPropertyChanged(nameof(ActiveDays1To7ChartText));
+        OnPropertyChanged(nameof(ActiveDays8To30ChartText));
     }
 
     private static double GetPercentage(
@@ -696,8 +855,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 informationalVersion))
         {
             var metadataSeparatorIndex =
-                informationalVersion.IndexOf(
-                    '+');
+                informationalVersion.IndexOf('+');
 
             if (metadataSeparatorIndex >= 0)
             {
@@ -716,3 +874,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
                ?? "unbekannt";
     }
 }
+
+/// <summary>
+/// Fertig aufbereitete Anzeigezeile für
+/// die dynamische WPF-Blacklist-Liste.
+///
+/// Die Oberfläche muss keine eigenen
+/// Statusentscheidungen treffen.
+///
+/// StatusKind und StatusSymbol können
+/// direkt per WPF-Binding verwendet werden.
+///
+/// DetailsText ist für eine spätere
+/// Detailansicht oder einen Tooltip vorgesehen.
+/// </summary>
+public sealed record ReputationBlacklistRow(
+    string Id,
+    string DisplayName,
+    string Status,
+    string StatusKind,
+    string StatusSymbol,
+    string StatusText,
+    int SortOrder,
+    string? CheckedTarget,
+    string CompletedAtText,
+    string? ProviderResponse,
+    string? ErrorMessage,
+    string TargetKind,
+    string AccessStatus,
+    string DetailsText);

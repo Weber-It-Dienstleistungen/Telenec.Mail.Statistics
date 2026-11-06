@@ -15,23 +15,18 @@ internal static class Program
     private const string TargetQuery =
         "10.2.0.192.test.example";
 
-    private const string TestIpAddress =
-        "192.0.2.10";
+    private const string TestIpAddress = "192.0.2.10";
 
     private static readonly DnsBlacklistDnsResponse NxDomain =
         new(true, Array.Empty<IPAddress>());
 
     private static async Task<int> Main()
     {
-        Console.WriteLine(
-            "Telenec DNSBL – Regressionstests");
-
+        Console.WriteLine("Telenec DNSBL – Regressionstests");
         Console.WriteLine();
 
         var passed = 0;
         var failed = 0;
-
-        // Bestehende Tests der DNSBL-Engine.
 
         var scenarios = new[]
         {
@@ -137,12 +132,9 @@ internal static class Program
             "Ungültiges Prüfziel",
             CheckInvalidAddressAsync);
 
-        // Neue Tests des Batch-Runners.
-
         Console.WriteLine();
         Console.WriteLine(
             "Blacklist-Batch – Mehrfachanbieter-Tests");
-
         Console.WriteLine();
 
         await RunTestAsync(
@@ -186,10 +178,26 @@ internal static class Program
             CheckBatchCancellationAsync);
 
         Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Batch – Timeout- und Lasttests");
+        Console.WriteLine();
+
+        await RunTestAsync(
+            "Ignorierter Abbruch führt zu Timeout",
+            CheckIgnoredCancellationTimeoutAsync);
+
+        await RunTestAsync(
+            "Maximal vier laufende Anbieter",
+            CheckMaximumConcurrencyAsync);
+
+        await RunTestAsync(
+            "Abbruch während hängender Prüfung",
+            CheckCancellationDuringPendingCheckAsync);
+
+        Console.WriteLine();
 
         Console.WriteLine(
-            $"Ergebnis: {passed} erfolgreich, " +
-            $"{failed} fehlgeschlagen.");
+            $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");
 
         return failed == 0 ? 0 : 1;
 
@@ -201,26 +209,20 @@ internal static class Program
             {
                 await test();
 
-                Console.WriteLine(
-                    $"[OK] {name}");
-
+                Console.WriteLine($"[OK] {name}");
                 passed++;
             }
             catch (Exception exception)
             {
-                Console.WriteLine(
-                    $"[FEHLER] {name}");
-
-                Console.WriteLine(
-                    $"         {exception.Message}");
-
+                Console.WriteLine($"[FEHLER] {name}");
+                Console.WriteLine($"         {exception.Message}");
                 failed++;
             }
         }
     }
 
     // ===================================================
-    // Bestehende Tests der generischen DNSBL-Engine
+    // DNSBL-Engine – bisherige Regressionstests
     // ===================================================
 
     private static async Task RunScenarioAsync(
@@ -231,37 +233,21 @@ internal static class Program
                 StringComparer.OrdinalIgnoreCase);
 
         if (scenario.PositiveResponse is not null)
-        {
-            answers.Add(
-                PositiveQuery,
-                scenario.PositiveResponse);
-        }
+            answers.Add(PositiveQuery, scenario.PositiveResponse);
 
         if (scenario.NegativeResponse is not null)
-        {
-            answers.Add(
-                NegativeQuery,
-                scenario.NegativeResponse);
-        }
+            answers.Add(NegativeQuery, scenario.NegativeResponse);
 
         if (scenario.TargetResponse is not null)
-        {
-            answers.Add(
-                TargetQuery,
-                scenario.TargetResponse);
-        }
+            answers.Add(TargetQuery, scenario.TargetResponse);
 
-        var resolver =
-            new FakeDnsResolver(answers);
+        var resolver = new FakeDnsResolver(answers);
 
-        var checker =
-            new DnsBlacklistChecker(
-                CreateProfile(),
-                resolver);
+        var checker = new DnsBlacklistChecker(
+            CreateProfile(),
+            resolver);
 
-        var result =
-            await checker.CheckAsync(
-                TestIpAddress);
+        var result = await checker.CheckAsync(TestIpAddress);
 
         Assert(
             result.Status == scenario.ExpectedStatus,
@@ -295,8 +281,7 @@ internal static class Program
             "Prüfzeitpunkte fehlen.");
 
         Assert(
-            resolver.Queries.Count ==
-                scenario.ExpectedQueryCount,
+            resolver.Queries.Count == scenario.ExpectedQueryCount,
             "Die Anzahl der DNS-Abfragen ist falsch.");
 
         var expectedQueries =
@@ -317,26 +302,22 @@ internal static class Program
 
     private static async Task CheckInvalidAddressAsync()
     {
-        var resolver =
-            new FakeDnsResolver(
-                new Dictionary<string, DnsBlacklistDnsResponse>());
+        var resolver = new FakeDnsResolver(
+            new Dictionary<string, DnsBlacklistDnsResponse>());
 
-        var checker =
-            new DnsBlacklistChecker(
-                CreateProfile(),
-                resolver);
+        var checker = new DnsBlacklistChecker(
+            CreateProfile(),
+            resolver);
 
-        var result =
-            await checker.CheckAsync(
-                "keine-ip-adresse");
+        var result = await checker.CheckAsync(
+            "keine-ip-adresse");
 
         Assert(
             result.Status == BlacklistCheckStatus.Failed,
             "Ein ungültiges Prüfziel wurde nicht als Fehler bewertet.");
 
         Assert(
-            !result.IsConclusive
-            && result.IsListed is null,
+            !result.IsConclusive && result.IsListed is null,
             "Ein ungültiges Prüfziel wurde als verlässliches Ergebnis bewertet.");
 
         Assert(
@@ -345,16 +326,9 @@ internal static class Program
     }
 
     // ===================================================
-    // Neue Tests des Blacklist-Batch-Runners
+    // Batch-Runner – bestehende Regressionstests
     // ===================================================
 
-    /// <summary>
-    /// Drei simulierte Anbieter werden gleichzeitig
-    /// über denselben Batch-Runner geprüft.
-    ///
-    /// Die Ergebnisse müssen getrennt und
-    /// korrekt zugeordnet zurückkommen.
-    /// </summary>
     private static async Task CheckMultipleProvidersAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -375,17 +349,13 @@ internal static class Program
         };
 
         var results =
-            await runner.RunAsync(
-                jobs,
-                TestIpAddress);
+            await runner.RunAsync(jobs, TestIpAddress);
 
-        Assert(
-            results.Count == 3,
+        Assert(results.Count == 3,
             "Es wurden nicht alle drei Ergebnisse geliefert.");
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.NotListed,
+            results["psbl"].Status == BlacklistCheckStatus.NotListed,
             "Das PSBL-Ergebnis ist falsch.");
 
         Assert(
@@ -393,8 +363,7 @@ internal static class Program
             "PSBL wurde nicht als negativer Befund bewertet.");
 
         Assert(
-            results["spamcop"].Status ==
-                BlacklistCheckStatus.Listed,
+            results["spamcop"].Status == BlacklistCheckStatus.Listed,
             "Das simulierte SpamCop-Ergebnis ist falsch.");
 
         Assert(
@@ -411,12 +380,6 @@ internal static class Program
             "Die Zugriffssperre wurde als Listungsergebnis bewertet.");
     }
 
-    /// <summary>
-    /// Ein Anbieter wirft eine Exception.
-    ///
-    /// Der andere Anbieter muss trotzdem
-    /// ein korrektes Ergebnis liefern.
-    /// </summary>
     private static async Task CheckProviderFailureIsolationAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -434,22 +397,17 @@ internal static class Program
         };
 
         var results =
-            await runner.RunAsync(
-                jobs,
-                TestIpAddress);
+            await runner.RunAsync(jobs, TestIpAddress);
 
-        Assert(
-            results.Count == 2,
+        Assert(results.Count == 2,
             "Der Batch hat nicht beide Ergebnisse geliefert.");
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.NotListed,
+            results["psbl"].Status == BlacklistCheckStatus.NotListed,
             "Der funktionierende Anbieter wurde beeinträchtigt.");
 
         Assert(
-            results["spamcop"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["spamcop"].Status == BlacklistCheckStatus.Failed,
             "Der Anbieterausfall wurde nicht als Fehler erfasst.");
 
         Assert(
@@ -458,10 +416,6 @@ internal static class Program
             "Der Anbieterausfall wurde als verlässlicher Befund bewertet.");
     }
 
-    /// <summary>
-    /// Ein Anbieter liefert null statt eines
-    /// Prüfergebnisses.
-    /// </summary>
     private static async Task CheckNullResultAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -475,88 +429,67 @@ internal static class Program
         };
 
         var results =
-            await runner.RunAsync(
-                jobs,
-                TestIpAddress);
+            await runner.RunAsync(jobs, TestIpAddress);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Ein leeres Ergebnis wurde nicht abgewiesen.");
     }
 
-    /// <summary>
-    /// Ein Prüfer meldet eine andere Kennung
-    /// als die registrierte Blacklist.
-    /// </summary>
     private static async Task CheckWrongBlacklistIdAsync()
     {
         var runner = new BlacklistBatchRunner();
 
-        var results =
-            await runner.RunAsync(
-                new[]
-                {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed,
-                        actualId: "spamcop")
-                },
-                TestIpAddress);
+        var results = await runner.RunAsync(
+            new[]
+            {
+                CreateJob(
+                    "psbl",
+                    BlacklistCheckStatus.NotListed,
+                    actualId: "spamcop")
+            },
+            TestIpAddress);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Eine falsche Blacklist-Kennung wurde akzeptiert.");
     }
 
-    /// <summary>
-    /// Der Anbieter behauptet, eine andere IP
-    /// geprüft zu haben.
-    /// </summary>
     private static async Task CheckWrongTargetAsync()
     {
         var runner = new BlacklistBatchRunner();
 
-        var results =
-            await runner.RunAsync(
-                new[]
-                {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed,
-                        actualTarget: "192.0.2.99")
-                },
-                TestIpAddress);
+        var results = await runner.RunAsync(
+            new[]
+            {
+                CreateJob(
+                    "psbl",
+                    BlacklistCheckStatus.NotListed,
+                    actualTarget: "192.0.2.99")
+            },
+            TestIpAddress);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Ein abweichendes Prüfziel wurde akzeptiert.");
     }
 
-    /// <summary>
-    /// Ein bestätigtes Ergebnis ohne Zeitstempel
-    /// darf nicht als gültig dargestellt werden.
-    /// </summary>
     private static async Task CheckMissingTimestampsAsync()
     {
         var runner = new BlacklistBatchRunner();
 
-        var results =
-            await runner.RunAsync(
-                new[]
-                {
-                    CreateJob(
-                        "psbl",
-                        BlacklistCheckStatus.NotListed,
-                        includeTimestamps: false)
-                },
-                TestIpAddress);
+        var results = await runner.RunAsync(
+            new[]
+            {
+                CreateJob(
+                    "psbl",
+                    BlacklistCheckStatus.NotListed,
+                    includeTimestamps: false)
+            },
+            TestIpAddress);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Ein Prüfergebnis ohne Zeitstempel wurde akzeptiert.");
 
         Assert(
@@ -564,10 +497,6 @@ internal static class Program
             "Ein fehlerhaftes Prüfergebnis wurde als negativ bewertet.");
     }
 
-    /// <summary>
-    /// Dieselbe Blacklist darf nicht mehrfach
-    /// in einem Batch registriert werden.
-    /// </summary>
     private static async Task CheckDuplicateRegistrationAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -587,10 +516,6 @@ internal static class Program
                 TestIpAddress));
     }
 
-    /// <summary>
-    /// Unbekannte Katalogkennungen werden
-    /// vor dem Start des Batches abgewiesen.
-    /// </summary>
     private static async Task CheckUnknownProviderAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -606,10 +531,6 @@ internal static class Program
                 TestIpAddress));
     }
 
-    /// <summary>
-    /// Der Batch akzeptiert ausschließlich
-    /// gültige IPv4-Prüfziele.
-    /// </summary>
     private static async Task CheckInvalidBatchAddressAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -625,11 +546,6 @@ internal static class Program
                 "keine-ip-adresse"));
     }
 
-    /// <summary>
-    /// Ein ausdrücklicher Abbruch durch den
-    /// aufrufenden Dienst darf nicht als
-    /// gewöhnlicher Anbieterfehler verschwinden.
-    /// </summary>
     private static async Task CheckBatchCancellationAsync()
     {
         var runner = new BlacklistBatchRunner();
@@ -652,15 +568,202 @@ internal static class Program
     }
 
     // ===================================================
-    // Hilfsfunktionen
+    // NEU: Timeout- und Parallelitätsprüfung
     // ===================================================
 
     /// <summary>
-    /// Erzeugt einen simulierten Anbieter.
+    /// Ein Anbieter ignoriert die Abbruchanforderung.
     ///
-    /// Es erfolgt ausdrücklich keine
-    /// echte DNS- oder API-Abfrage.
+    /// Der Batch muss trotzdem nach seinem
+    /// Zeitlimit mit Failed zurückkehren.
+    ///
+    /// Das simulierte Hängen wird anschließend
+    /// im finally-Block aufgelöst.
     /// </summary>
+    private static async Task CheckIgnoredCancellationTimeoutAsync()
+    {
+        var runner = new BlacklistBatchRunner(
+            TimeSpan.FromMilliseconds(200));
+
+        var pending =
+            new TaskCompletionSource<BlacklistCheckResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            var results = await runner.RunAsync(
+                    new[]
+                    {
+                        new BlacklistCheckJob(
+                            "psbl",
+                            (_, _) => pending.Task)
+                    },
+                    TestIpAddress)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            var result = results["psbl"];
+
+            Assert(
+                result.Status == BlacklistCheckStatus.Failed,
+                "Der hängende Anbieter wurde nicht als Fehler bewertet.");
+
+            Assert(
+                !result.IsConclusive && result.IsListed is null,
+                "Der Timeout wurde als verlässliches Ergebnis bewertet.");
+
+            Assert(
+                result.ErrorMessage?.Contains(
+                    "Zeitlimit",
+                    StringComparison.OrdinalIgnoreCase) == true,
+                "Die Timeout-Meldung fehlt.");
+        }
+        finally
+        {
+            pending.TrySetResult(CreateResult(
+                "psbl",
+                TestIpAddress,
+                BlacklistCheckStatus.NotListed));
+        }
+    }
+
+    /// <summary>
+    /// Fünf getrennte Batches verwenden
+    /// dieselbe Runner-Instanz.
+    ///
+    /// Vier Anbieter dürfen gleichzeitig
+    /// tatsächlich laufen.
+    ///
+    /// Der fünfte muss wegen des belegten
+    /// Prüfplatzes scheitern.
+    ///
+    /// Dadurch überprüfen wir die Begrenzung
+    /// auch über mehrere Batch-Aufrufe hinweg.
+    /// </summary>
+    private static async Task CheckMaximumConcurrencyAsync()
+    {
+        var runner = new BlacklistBatchRunner(
+            TimeSpan.FromSeconds(2));
+
+        var pending =
+            new TaskCompletionSource<BlacklistCheckResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var startedCount = 0;
+
+        try
+        {
+            var runs = Enumerable.Range(0, 5)
+                .Select(_ => runner.RunAsync(
+                    new[]
+                    {
+                        new BlacklistCheckJob(
+                            "psbl",
+                            (_, _) =>
+                            {
+                                Interlocked.Increment(
+                                    ref startedCount);
+
+                                // Absichtlich ignorierter Token.
+                                return pending.Task;
+                            })
+                    },
+                    TestIpAddress))
+                .ToArray();
+
+            var results = await Task.WhenAll(runs)
+                .WaitAsync(TimeSpan.FromSeconds(8));
+
+            Assert(
+                Volatile.Read(ref startedCount) == 4,
+                "Die Parallelitätsgrenze wurde nicht korrekt eingehalten.");
+
+            Assert(
+                results.All(item =>
+                    item["psbl"].Status ==
+                    BlacklistCheckStatus.Failed),
+                "Nicht alle blockierten Anbieter wurden als Fehler bewertet.");
+
+            var unavailableSlots = results.Count(item =>
+                item["psbl"].ErrorMessage?.Contains(
+                    "Kein freier Prüfplatz",
+                    StringComparison.OrdinalIgnoreCase) == true);
+
+            Assert(
+                unavailableSlots == 1,
+                "Ein belegter Prüfplatz wurde nicht korrekt erkannt.");
+        }
+        finally
+        {
+            pending.TrySetResult(CreateResult(
+                "psbl",
+                TestIpAddress,
+                BlacklistCheckStatus.NotListed));
+        }
+    }
+
+    /// <summary>
+    /// Der Benutzer bzw. Host beendet
+    /// einen laufenden Batch ausdrücklich.
+    ///
+    /// Auch wenn ein Prüfer noch hängt,
+    /// muss der Abbruch weitergegeben werden.
+    /// </summary>
+    private static async Task CheckCancellationDuringPendingCheckAsync()
+    {
+        var runner = new BlacklistBatchRunner(
+            TimeSpan.FromSeconds(3));
+
+        using var cancellation =
+            new CancellationTokenSource();
+
+        var pending =
+            new TaskCompletionSource<BlacklistCheckResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var started =
+            new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        try
+        {
+            var batchTask = runner.RunAsync(
+                new[]
+                {
+                    new BlacklistCheckJob(
+                        "psbl",
+                        (_, _) =>
+                        {
+                            started.TrySetResult();
+
+                            // Prüfer ignoriert den Abbruch.
+                            return pending.Task;
+                        })
+                },
+                TestIpAddress,
+                cancellation.Token);
+
+            await started.Task.WaitAsync(
+                TimeSpan.FromSeconds(5));
+
+            cancellation.Cancel();
+
+            await ExpectExceptionAsync<OperationCanceledException>(
+                () => batchTask.WaitAsync(
+                    TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            pending.TrySetResult(CreateResult(
+                "psbl",
+                TestIpAddress,
+                BlacklistCheckStatus.NotListed));
+        }
+    }
+
+    // ===================================================
+    // Gemeinsame Hilfsfunktionen
+    // ===================================================
+
     private static BlacklistCheckJob CreateJob(
         string blacklistId,
         BlacklistCheckStatus status,
@@ -695,6 +798,23 @@ internal static class Program
 
                 return Task.FromResult(result);
             });
+    }
+
+    private static BlacklistCheckResult CreateResult(
+        string blacklistId,
+        string target,
+        BlacklistCheckStatus status)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        return new BlacklistCheckResult
+        {
+            BlacklistId = blacklistId,
+            CheckedTarget = target,
+            Status = status,
+            StartedAtUtc = now,
+            CompletedAtUtc = now
+        };
     }
 
     private static async Task ExpectExceptionAsync<TException>(
@@ -757,10 +877,6 @@ internal static class Program
         bool? ExpectedIsListed,
         int ExpectedQueryCount);
 
-    /// <summary>
-    /// Simulierter DNS-Resolver für die
-    /// bestehenden DNSBL-Regressionstests.
-    /// </summary>
     private sealed class FakeDnsResolver
         : IDnsBlacklistResolver
     {

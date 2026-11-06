@@ -94,7 +94,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.RequiresProviderAuthorization),
 
             // Erste aktive DNSBL-Anbietergruppe.
-            // Kommerzielle DNSBL-Nutzung erlaubt.
 
             new(
                 "0spam",
@@ -126,7 +125,22 @@ public static class BlacklistCatalog
 
             new("barracuda", "BARRACUDA"),
 
-            new("blocklist-de", "BLOCKLIST.DE"),
+            // Zweite aktive DNSBL-Anbietergruppe.
+            //
+            // blocklist.de registriert verschiedene
+            // Kategorien von Angriffen auf Server.
+            //
+            // Ein Listungstreffer beweist daher
+            // nicht automatisch Spamversand.
+            //
+            // Die DNSBL-Nutzung zur Bewertung
+            // von IP-Adressen ist dokumentiert.
+
+            new(
+                "blocklist-de",
+                "BLOCKLIST.DE",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted),
 
             new("calivent", "CALIVENT"),
 
@@ -139,7 +153,6 @@ public static class BlacklistCatalog
             new("drmx", "DRMX"),
 
             // DroneBL:
-            // Kommerzielle Nutzung erlaubt.
             //
             // Technisch vorbereitet, derzeit
             // aber NICHT im Monitoring registriert.
@@ -198,6 +211,9 @@ public static class BlacklistCatalog
             new("nosolicitado", "NoSolicitado"),
 
             // Bisheriger produktiver PSBL-Prüfer.
+            //
+            // PSBL bleibt unabhängig von den
+            // generischen DNSBL-Profilen aktiv.
 
             new(
                 "psbl",
@@ -228,9 +244,15 @@ public static class BlacklistCatalog
             new("servicesnet", "SERVICESNET"),
 
             // SpamCop:
-            // IP-DNSBL ist dokumentiert.
-            // Nutzungsfreigabe für Telenec
-            // noch nicht abschließend geprüft.
+            //
+            // Die IP-basierte DNSBL ist dokumentiert.
+            //
+            // Die Nutzungsbedingungen für unser
+            // separates kommerzielles Monitoring
+            // sind noch nicht abschließend geklärt.
+            //
+            // Das Profil bleibt vorbereitet,
+            // wird aber nicht aktiv registriert.
 
             new(
                 "spamcop",
@@ -239,7 +261,9 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.NotReviewed),
 
             // Spamhaus ZEN:
-            // Geeigneter kommerzieller Zugang erforderlich.
+            //
+            // Geeigneter kommerzieller
+            // Anbieterzugang erforderlich.
 
             new(
                 "spamhaus-zen",
@@ -258,12 +282,36 @@ public static class BlacklistCatalog
             new("truncate", "TRUNCATE"),
 
             // UCEPROTECT:
-            // Kostenlose private und kommerzielle
-            // Nutzung laut Betreiber erlaubt.
             //
-            // Level 1 ist bereits integriert.
-            // Level 2 und 3 bleiben getrennte,
-            // noch nicht aktivierte Quellen.
+            // Alle drei Level werden über
+            // separate DNSBL-Zonen angeboten.
+            //
+            // Die Prüfung erfolgt technisch
+            // jeweils anhand einer IPv4-Adresse.
+            //
+            // Die fachliche Bedeutung unterscheidet
+            // sich jedoch erheblich:
+            //
+            // Level 1:
+            // Reputation der einzelnen IPv4-Adresse.
+            //
+            // Level 2:
+            // Reputation eines größeren Netzbereichs.
+            //
+            // Level 3:
+            // Reputation eines gesamten ASN.
+            //
+            // Bei Level 2 und Level 3 bedeutet
+            // eine Listung nicht zwangsläufig,
+            // dass die konkrete Versand-IP
+            // selbst Spam versendet hat.
+            //
+            // Dieser Unterschied muss in der
+            // späteren Benutzeroberfläche
+            // ausdrücklich erklärt werden.
+            //
+            // Alle drei Level gehören jetzt
+            // zur aktiven Monitoring-Konfiguration.
 
             new(
                 "uceprotectl1",

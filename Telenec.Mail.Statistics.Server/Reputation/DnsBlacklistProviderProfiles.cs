@@ -2,30 +2,28 @@
 namespace Telenec.Mail.Statistics.Server.Reputation;
 
 /// <summary>
-/// Technische DNSBL-Profile der ersten Anbietergruppe.
+/// Zentrale DNSBL-Anbieterprofile.
 ///
-/// Die Profile sind zunächst ausschließlich
+/// Die Profile enthalten ausschließlich technische
 /// Konfigurationsdaten.
 ///
-/// Sie starten keine DNS-Abfragen und
-/// aktivieren keine Anbieter im Monitoring.
+/// Das Anlegen eines Profils aktiviert keine
+/// externen Abfragen.
 ///
-/// Vor der produktiven Aktivierung werden
-/// die Profile automatisiert getestet und
-/// die Kontrollabfragen live überprüft.
+/// Aktive Anbieter werden ausschließlich im
+/// BlacklistMonitoringService registriert.
+///
+/// Vor einer produktiven Aktivierung müssen
+/// Rückgabecodes, Kontrolladressen und
+/// Nutzungsbedingungen geprüft sein.
 /// </summary>
 public static class DnsBlacklistProviderProfiles
 {
     /*
-     * 0spam Hauptliste:
+     * 0spam:
      *
-     * 127.0.0.1 bis 127.0.0.9:
-     * Verschiedene Listungsgründe für Einzel-IPs.
-     *
-     * 127.0.1.0 bis 127.0.9.0:
-     * Entsprechende Kategorien auf Netzebene.
-     *
-     * Andere Antwortcodes bleiben Unknown.
+     * Unterschiedliche Rückgabecodes für
+     * Einzeladressen und Netzbereiche.
      */
     private static readonly IReadOnlyCollection<string>
         ZeroSpamMainCodes =
@@ -37,15 +35,48 @@ public static class DnsBlacklistProviderProfiles
                             $"127.0.{number}.0"))
                 .ToArray();
 
+    /*
+     * blocklist.de:
+     *
+     * Rückgabecodes 127.0.0.2 bis
+     * 127.0.0.22 kennzeichnen
+     * dokumentierte Angriffskategorien.
+     *
+     * Beispielsweise:
+     * 127.0.0.2  amavis
+     * 127.0.0.9  mail
+     * 127.0.0.14 ssh
+     * 127.0.0.15 w00tw00t
+     *
+     * Der kontrollierte Testeintrag
+     * liefert aktuell 127.0.0.2.
+     */
+    private static readonly IReadOnlyCollection<string>
+        BlocklistDeCodes =
+            Enumerable.Range(2, 21)
+                .Select(number => $"127.0.0.{number}")
+                .ToArray();
+
+    /// <summary>
+    /// Erste Anbietergruppe.
+    ///
+    /// PSBL wird separat integriert.
+    ///
+    /// Aktuell produktiv registriert:
+    /// - 0spam
+    /// - 0spam RBL
+    /// - UCEPROTECT Level 1
+    ///
+    /// DroneBL bleibt vorbereitet, aber
+    /// wegen der lokalen DNS-Abweichung
+    /// noch deaktiviert.
+    /// </summary>
     public static IReadOnlyList<DnsBlacklistProfile>
         FirstBatch
     { get; } =
             Array.AsReadOnly(
                 new DnsBlacklistProfile[]
                 {
-                    /*
-                     * 0spam Main DNSBL
-                     */
                     new(
                         BlacklistId: "0spam",
                         DnsZone: "bl.0spam.org",
@@ -56,17 +87,6 @@ public static class DnsBlacklistProviderProfiles
                         PositiveControlAddress: "127.0.0.2",
                         NegativeControlAddress: "127.0.0.1"),
 
-                    /*
-                     * 0spam Realtime Blacklist
-                     *
-                     * Der Testcode 127.0.0.2
-                     * sowie 127.0.0.15 wurden
-                     * als Anbieterantworten
-                     * dokumentiert.
-                     *
-                     * Weitere nicht bestätigte
-                     * Codes bleiben Unknown.
-                     */
                     new(
                         BlacklistId: "0spam-rbl",
                         DnsZone: "rbl.0spam.org",
@@ -82,18 +102,15 @@ public static class DnsBlacklistProviderProfiles
                         NegativeControlAddress: "127.0.0.1"),
 
                     /*
-                     * DroneBL
+                     * DroneBL:
                      *
-                     * 127.0.0.1 ist der bekannte
-                     * positive Testeintrag.
+                     * Noch nicht aktiv.
+                     * Der lokale Windows-Resolver
+                     * konnte den positiven Testeintrag
+                     * bislang nicht auflösen.
                      *
-                     * 127.0.0.255 wird bewusst
-                     * nicht als bestätigter
-                     * Listungscode akzeptiert.
-                     *
-                     * Die weiteren Codes bilden
-                     * dokumentierte Kategorien
-                     * von Missbrauchssystemen ab.
+                     * Öffentliche Resolver lieferten
+                     * den erwarteten Wert 127.0.0.1.
                      */
                     new(
                         BlacklistId: "drone-bl",
@@ -124,16 +141,115 @@ public static class DnsBlacklistProviderProfiles
                         PositiveControlAddress: "127.0.0.2",
                         NegativeControlAddress: "127.0.0.1"),
 
-                    /*
-                     * UCEPROTECT Level 1
-                     *
-                     * Prüft einzelne IPv4-Adressen.
-                     * Level 2 und 3 sind separate
-                     * Reputationsquellen.
-                     */
                     new(
                         BlacklistId: "uceprotectl1",
                         DnsZone: "dnsbl-1.uceprotect.net",
+                        ListedReturnCodes:
+                            new[]
+                            {
+                                "127.0.0.2"
+                            },
+                        AccessDeniedReturnCodes:
+                            Array.Empty<string>(),
+                        PositiveControlAddress: "127.0.0.2",
+                        NegativeControlAddress: "127.0.0.1")
+                });
+
+    /// <summary>
+    /// Zweite Anbietergruppe.
+    ///
+    /// Alle vier DNS-Zonen haben die
+    /// grundlegenden Positiv- und
+    /// Negativkontrollen über die
+    /// .NET-Systemauflösung bestanden.
+    ///
+    /// Diese Profile sind derzeit
+    /// noch NICHT produktiv registriert.
+    /// </summary>
+    public static IReadOnlyList<DnsBlacklistProfile>
+        SecondBatch
+    { get; } =
+            Array.AsReadOnly(
+                new DnsBlacklistProfile[]
+                {
+                    /*
+                     * blocklist.de
+                     *
+                     * Berücksichtigt verschiedene
+                     * dokumentierte Angriffskategorien.
+                     *
+                     * Ein Treffer muss nicht zwingend
+                     * auf Spamversand zurückgehen.
+                     */
+                    new(
+                        BlacklistId: "blocklist-de",
+                        DnsZone: "bl.blocklist.de",
+                        ListedReturnCodes:
+                            BlocklistDeCodes,
+                        AccessDeniedReturnCodes:
+                            Array.Empty<string>(),
+                        PositiveControlAddress: "127.0.0.2",
+                        NegativeControlAddress: "127.0.0.1"),
+
+                    /*
+                     * SpamCop Blocking List
+                     *
+                     * IP-basierte Reputationsliste
+                     * für gemeldeten Spamversand.
+                     *
+                     * Dokumentierter Rückgabecode:
+                     * 127.0.0.2
+                     */
+                    new(
+                        BlacklistId: "spamcop",
+                        DnsZone: "bl.spamcop.net",
+                        ListedReturnCodes:
+                            new[]
+                            {
+                                "127.0.0.2"
+                            },
+                        AccessDeniedReturnCodes:
+                            Array.Empty<string>(),
+                        PositiveControlAddress: "127.0.0.2",
+                        NegativeControlAddress: "127.0.0.1"),
+
+                    /*
+                     * UCEPROTECT Level 2
+                     *
+                     * Prüft die Reputation
+                     * größerer IP-Netzbereiche.
+                     *
+                     * Ein Listungstreffer bedeutet
+                     * nicht zwangsläufig, dass
+                     * die konkrete Versand-IP
+                     * selbst Spam verschickt hat.
+                     */
+                    new(
+                        BlacklistId: "uceprotectl2",
+                        DnsZone: "dnsbl-2.uceprotect.net",
+                        ListedReturnCodes:
+                            new[]
+                            {
+                                "127.0.0.2"
+                            },
+                        AccessDeniedReturnCodes:
+                            Array.Empty<string>(),
+                        PositiveControlAddress: "127.0.0.2",
+                        NegativeControlAddress: "127.0.0.1"),
+
+                    /*
+                     * UCEPROTECT Level 3
+                     *
+                     * Bewertet die Reputation
+                     * ganzer autonomer Systeme.
+                     *
+                     * Treffer müssen später
+                     * entsprechend kenntlich
+                     * gemacht werden.
+                     */
+                    new(
+                        BlacklistId: "uceprotectl3",
+                        DnsZone: "dnsbl-3.uceprotect.net",
                         ListedReturnCodes:
                             new[]
                             {

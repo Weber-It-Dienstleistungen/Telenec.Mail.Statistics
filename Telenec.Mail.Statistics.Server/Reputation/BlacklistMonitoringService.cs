@@ -76,19 +76,32 @@ public sealed class BlacklistMonitoringService : BackgroundService
             ?? "80.79.237.70";
 
         /*
-         * Aktive Anbietergruppe:
+         * Freigegebene aktive DNSBL-Profile:
          *
-         * PSBL
-         * 0spam
-         * 0spam RBL
-         * UCEPROTECT Level 1
+         * Erste Gruppe:
+         * - 0spam
+         * - 0spam RBL
+         * - UCEPROTECT Level 1
          *
-         * DroneBL bleibt ausdrücklich deaktiviert,
-         * bis die DNS-Auflösung auf dem Zielserver
-         * geklärt wurde.
+         * Zweite Gruppe:
+         * - blocklist.de
+         * - UCEPROTECT Level 2
+         * - UCEPROTECT Level 3
          *
-         * Nicht aufgelistete Profile werden
-         * niemals automatisch aktiviert.
+         * PSBL wird separat registriert.
+         *
+         * Damit sind insgesamt sieben
+         * Reputationslisten aktiv.
+         *
+         * DroneBL bleibt wegen der ungeklärten
+         * lokalen DNS-Auflösung deaktiviert.
+         *
+         * SpamCop bleibt deaktiviert, bis die
+         * Nutzungsbedingungen für unseren
+         * Anwendungsfall abschließend geprüft sind.
+         *
+         * Andere Profile werden niemals
+         * automatisch aktiviert.
          */
 
         var approvedDnsblIds =
@@ -96,19 +109,32 @@ public sealed class BlacklistMonitoringService : BackgroundService
             {
                 "0spam",
                 "0spam-rbl",
-                "uceprotectl1"
+                "uceprotectl1",
+                "blocklist-de",
+                "uceprotectl2",
+                "uceprotectl3"
             };
+
+        /*
+         * Beide vorbereiteten Anbietergruppen
+         * bilden den gemeinsamen Profilkatalog.
+         *
+         * Nur explizit freigegebene Kennungen
+         * gelangen in das produktive Monitoring.
+         */
 
         var approvedProfiles =
             DnsBlacklistProviderProfiles.FirstBatch
+                .Concat(
+                    DnsBlacklistProviderProfiles.SecondBatch)
                 .Where(profile =>
                     approvedDnsblIds.Contains(
                         profile.BlacklistId))
                 .ToArray();
 
         /*
-         * Es müssen exakt die erwarteten drei
-         * DNSBL-Profile vorhanden sein.
+         * Die Freigabeliste muss vollständig
+         * und ohne Duplikate umgesetzt sein.
          *
          * Fehlende oder doppelte Profile führen
          * zu einem Startfehler statt zu einer
@@ -292,7 +318,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 {
                     /*
                      * Ein gemeinsamer Batch für
-                     * alle vier Anbieter.
+                     * alle sieben Anbieter.
                      *
                      * Jeder Anbieter liefert sein
                      * eigenes Prüfergebnis.
@@ -336,8 +362,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
          * bezeichnet weiterhin ausschließlich
          * PSBL.
          *
-         * Die neue Results-Sammlung enthält
-         * die vier aktiven Anbieter.
+         * Die Results-Sammlung enthält alle
+         * sieben aktiven Anbieter.
          */
 
         var psblResult = results["psbl"];

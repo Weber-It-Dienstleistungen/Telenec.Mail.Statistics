@@ -1,12 +1,22 @@
 ﻿
+using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.Sockets;
 
 namespace Telenec.Mail.Statistics.Server.Reputation;
 
 /// <summary>
-/// Aktueller Zustand der serverseitigen Blacklist-Überwachung.
-/// Enthält das letzte Ergebnis und die zugehörigen Zeitpunkte.
+/// Aktueller Zustand der serverseitigen
+/// Blacklist-Überwachung.
+///
+/// Die bisherigen Eigenschaften bleiben
+/// vollständig erhalten.
+///
+/// Results ergänzt den Snapshot um eine
+/// Sammlung einzelner Prüfergebnisse.
+///
+/// Result bleibt für die bisherige
+/// PSBL-API rückwärtskompatibel bestehen.
 /// </summary>
 public sealed record BlacklistMonitoringSnapshot(
     string Hostname,
@@ -14,17 +24,38 @@ public sealed record BlacklistMonitoringSnapshot(
     IReadOnlyList<string> ResolvedIpv4Addresses,
     DateTimeOffset? LastAttemptUtc,
     DateTimeOffset? LastSuccessfulCheckUtc,
-    BlacklistCheckResult Result);
+    BlacklistCheckResult Result)
+{
+    /// <summary>
+    /// Prüfergebnisse nach Blacklist-Kennung.
+    ///
+    /// Die Sammlung wird beim Veröffentlichen
+    /// eines Snapshots vollständig erstellt.
+    ///
+    /// Nach der Veröffentlichung darf sie
+    /// nicht mehr verändert werden.
+    ///
+    /// Derzeit enthält sie nur PSBL.
+    /// </summary>
+    public IReadOnlyDictionary<string, BlacklistCheckResult>
+        Results
+    { get; init; } =
+            new ReadOnlyDictionary<string, BlacklistCheckResult>(
+                new Dictionary<string, BlacklistCheckResult>(
+                    StringComparer.Ordinal));
+}
 
 /// <summary>
 /// Führt Blacklist-Prüfungen im Hintergrund aus.
 ///
-/// Die Ergebnisse werden ausschließlich im Arbeitsspeicher
-/// gehalten. Ein Dashboard-Aufruf löst keine zusätzliche
-/// externe DNSBL-Abfrage aus.
+/// Die Ergebnisse bleiben zunächst ausschließlich
+/// im Arbeitsspeicher.
 ///
-/// Für den ersten Proof of Work wird PSBL verwendet.
-/// Weitere Anbieter können später ergänzt werden.
+/// Ein Dashboard-Aufruf löst keine zusätzliche
+/// externe Blacklist-Abfrage aus.
+///
+/// Die Überwachung kann später um weitere
+/// Anbieter erweitert werden.
 /// </summary>
 public sealed class BlacklistMonitoringService : BackgroundService
 {
@@ -33,9 +64,11 @@ public sealed class BlacklistMonitoringService : BackgroundService
 
     private readonly TimeProvider _timeProvider;
 
-    private readonly ILogger<BlacklistMonitoringService> _logger;
+    private readonly ILogger<BlacklistMonitoringService>
+        _logger;
 
-    private readonly PsblBlacklistChecker _psblChecker = new();
+    private readonly PsblBlacklistChecker _psblChecker =
+        new();
 
     private readonly string _hostname;
 
@@ -59,27 +92,39 @@ public sealed class BlacklistMonitoringService : BackgroundService
             configuration["Reputation:ExpectedIpv4"]
             ?? "80.79.237.70";
 
+        /*
+         * Initialzustand der PSBL-Prüfung.
+         *
+         * Der Eintrag gilt technisch als
+         * integriert, besitzt aber noch kein
+         * abgeschlossenes Prüfergebnis.
+         */
+
+        var initialResult = new BlacklistCheckResult
+        {
+            BlacklistId = "psbl",
+            CheckedTarget = _expectedIpv4,
+            Status = BlacklistCheckStatus.NotChecked
+        };
+
         _snapshot = new BlacklistMonitoringSnapshot(
             Hostname: _hostname,
             ExpectedIpv4: _expectedIpv4,
             ResolvedIpv4Addresses: Array.Empty<string>(),
             LastAttemptUtc: null,
             LastSuccessfulCheckUtc: null,
-            Result: new BlacklistCheckResult
-            {
-                BlacklistId = "psbl",
-                CheckedTarget = _expectedIpv4,
-                Status = BlacklistCheckStatus.NotChecked
-            });
+            Result: initialResult)
+        {
+            Results = CreateResultCollection(
+                new[] { initialResult })
+        };
     }
 
     /// <summary>
-    /// Liefert den letzten vollständig veröffentlichten
-    /// Monitoring-Zustand.
+    /// Liefert den zuletzt vollständig
+    /// veröffentlichten Monitoring-Snapshot.
     ///
-    /// Diese Methode führt keine DNS-Abfrage aus
-    /// und kann daher schnell vom Dashboard
-    /// verwendet werden.
+    /// Es wird keine externe Abfrage ausgelöst.
     /// </summary>
     public BlacklistMonitoringSnapshot GetSnapshot()
     {
@@ -87,10 +132,10 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Führt direkt nach dem Start die erste Prüfung aus.
-    /// Danach erfolgt eine Prüfung alle 15 Minuten.
+    /// Führt nach dem Start eine Prüfung aus.
     ///
-    /// Alle Prüfungen werden nacheinander ausgeführt.
+    /// Weitere Prüfungen erfolgen im
+    /// Abstand von 15 Minuten.
     /// </summary>
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
@@ -112,22 +157,25 @@ public sealed class BlacklistMonitoringService : BackgroundService
         catch (OperationCanceledException)
             when (stoppingToken.IsCancellationRequested)
         {
-            // Reguläres Beenden des Hintergrunddienstes.
+            // Reguläres Beenden des Dienstes.
         }
     }
 
     /// <summary>
-    /// Überprüft zuerst die DNS-Auflösung des konfigurierten
-    /// Hosts und anschließend die erwartete Versand-IP
-    /// gegen PSBL.
+    /// Prüft zunächst die DNS-Auflösung
+    /// des konfigurierten Mailservers.
     ///
-    /// Stimmen DNS-Auflösung und erwartete IP nicht überein,
-    /// wird kein sauberer Blacklist-Status erzeugt.
+    /// Anschließend wird die Versand-IP
+    /// gegen PSBL geprüft.
+    ///
+    /// Spätere Anbieter können zusätzliche
+    /// Ergebnisse zur Sammlung beitragen.
     /// </summary>
     private async Task RunCheckAsync(
         CancellationToken cancellationToken)
     {
-        var startedAtUtc = _timeProvider.GetUtcNow();
+        var startedAtUtc =
+            _timeProvider.GetUtcNow();
 
         IReadOnlyList<string> resolvedAddresses =
             Array.Empty<string>();
@@ -175,9 +223,10 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 }
                 else
                 {
-                    result = await _psblChecker.CheckAsync(
-                        _expectedIpv4,
-                        cancellationToken);
+                    result =
+                        await _psblChecker.CheckAsync(
+                            _expectedIpv4,
+                            cancellationToken);
                 }
             }
         }
@@ -208,19 +257,43 @@ public sealed class BlacklistMonitoringService : BackgroundService
                     ?? _timeProvider.GetUtcNow()
                 : previousSnapshot.LastSuccessfulCheckUtc;
 
+        /*
+         * Die Ergebnissammlung wird vor
+         * der Veröffentlichung erstellt.
+         *
+         * Aktuell steht genau ein Ergebnis
+         * zur Verfügung: PSBL.
+         *
+         * Später können weitere Ergebnisse
+         * ergänzt werden, ohne den Snapshot
+         * erneut strukturell ändern zu müssen.
+         */
+
+        var results = CreateResultCollection(
+            new[] { result });
+
         var newSnapshot = new BlacklistMonitoringSnapshot(
             Hostname: _hostname,
             ExpectedIpv4: _expectedIpv4,
             ResolvedIpv4Addresses: resolvedAddresses,
             LastAttemptUtc: startedAtUtc,
             LastSuccessfulCheckUtc: lastSuccessfulCheckUtc,
-            Result: result);
+            Result: result)
+        {
+            Results = results
+        };
 
-        // Der gesamte Zustand wird in einem Schritt
-        // veröffentlicht. Leser sehen entweder den
-        // bisherigen oder den neuen vollständigen Zustand.
+        /*
+         * Der gesamte Monitoring-Zustand
+         * wird atomar veröffentlicht.
+         *
+         * Leser sehen entweder den vorherigen
+         * oder den neuen vollständigen Snapshot.
+         */
 
-        Volatile.Write(ref _snapshot, newSnapshot);
+        Volatile.Write(
+            ref _snapshot,
+            newSnapshot);
 
         _logger.LogInformation(
             "Blacklist-Prüfung abgeschlossen. " +
@@ -233,11 +306,59 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Erzeugt einen technischen Fehlerzustand,
-    /// beispielsweise bei einer DNS-Abweichung.
+    /// Erstellt eine schreibgeschützte Sammlung
+    /// der bereitgestellten Prüfergebnisse.
     ///
-    /// Fehler werden niemals als
-    /// "Nicht gelistet" gewertet.
+    /// Jede Blacklist erhält genau einen
+    /// Eintrag unter ihrer Katalogkennung.
+    ///
+    /// Doppelte Kennungen werden nicht
+    /// stillschweigend überschrieben.
+    ///
+    /// Die Sammlung wird nach ihrer Erstellung
+    /// nicht mehr verändert.
+    /// </summary>
+    private static IReadOnlyDictionary<string, BlacklistCheckResult>
+        CreateResultCollection(
+            IEnumerable<BlacklistCheckResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        var dictionary =
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal);
+
+        foreach (var result in results)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+
+            if (string.IsNullOrWhiteSpace(
+                    result.BlacklistId))
+            {
+                throw new InvalidOperationException(
+                    "Ein Blacklist-Ergebnis besitzt keine gültige Kennung.");
+            }
+
+            if (!dictionary.TryAdd(
+                    result.BlacklistId,
+                    result))
+            {
+                throw new InvalidOperationException(
+                    "Ein Blacklist-Ergebnis wurde mehrfach registriert: " +
+                    result.BlacklistId);
+            }
+        }
+
+        return new ReadOnlyDictionary<
+            string,
+            BlacklistCheckResult>(dictionary);
+    }
+
+    /// <summary>
+    /// Erzeugt einen technischen Fehlerzustand.
+    ///
+    /// Fehler dürfen niemals als
+    /// "Nicht gelistet" bewertet werden.
     /// </summary>
     private BlacklistCheckResult CreateFailure(
         DateTimeOffset startedAtUtc,
@@ -249,7 +370,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
             CheckedTarget = _expectedIpv4,
             Status = BlacklistCheckStatus.Failed,
             StartedAtUtc = startedAtUtc,
-            CompletedAtUtc = _timeProvider.GetUtcNow(),
+            CompletedAtUtc =
+                _timeProvider.GetUtcNow(),
             ErrorMessage = errorMessage
         };
     }

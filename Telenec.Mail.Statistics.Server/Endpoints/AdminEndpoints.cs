@@ -76,7 +76,7 @@ public static class AdminEndpoints
     /// Der Endpoint ist ausschließlich lesend.
     ///
     /// Die bisherige API-Antwort bleibt kompatibel.
-    /// Zusätzlich wird eine vollständige Übersicht
+    /// Zusätzlich wird die vollständige Übersicht
     /// aus dem BlacklistCatalog bereitgestellt.
     ///
     /// Die Übersicht enthält derzeit:
@@ -85,8 +85,11 @@ public static class AdminEndpoints
     /// - 1 integrierte Liste (PSBL)
     /// - 67 noch nicht integrierte Listen
     ///
-    /// Nur tatsächlich vorhandene Monitoring-Ergebnisse
-    /// werden als durchgeführte Prüfungen dargestellt.
+    /// Die Kennzahlen werden aus den tatsächlich
+    /// vorhandenen Monitoring-Ergebnissen berechnet.
+    ///
+    /// Spätere Erweiterungen um weitere Anbieter
+    /// benötigen keine Änderung des API-Vertrags.
     /// </summary>
     private static IResult HandleReputation(
         HttpRequest request,
@@ -94,8 +97,8 @@ public static class AdminEndpoints
         BlacklistMonitoringService monitoringService)
     {
         /*
-         * Authentifizierung erfolgt vor
-         * dem Zugriff auf Monitoring-Daten.
+         * Authentifizierung vor dem Zugriff
+         * auf die Monitoring-Daten.
          */
         var providedApiKey =
             request.Headers[AdminApiKeyHeaderName]
@@ -109,59 +112,48 @@ public static class AdminEndpoints
         /*
          * Atomar veröffentlichten Snapshot lesen.
          *
-         * Diese Operation führt keine externe
-         * Blacklist-Abfrage aus.
+         * Der Snapshot enthält jetzt die
+         * vollständige Ergebnissammlung.
+         *
+         * Der API-Aufruf löst keine zusätzlichen
+         * externen Prüfungen aus.
          */
         var snapshot =
             monitoringService.GetSnapshot();
 
         /*
-         * Aktuell steht das Ergebnis des
-         * PSBL-Monitorings zur Verfügung.
+         * Dynamische Blacklist-Übersicht.
          *
-         * Die Dictionary-Struktur ermöglicht es,
-         * künftig mehrere Prüfergebnisse an
-         * die OverviewFactory zu übergeben.
+         * Die Ergebnissammlung kommt unmittelbar
+         * aus dem Monitoring-Snapshot.
          *
-         * Die Erweiterung des Monitoring-Dienstes
-         * erfolgt in einem späteren Sprint.
-         */
-        IReadOnlyDictionary<string, BlacklistCheckResult>
-            latestResults =
-                new Dictionary<string, BlacklistCheckResult>(
-                    StringComparer.Ordinal)
-                {
-                    [snapshot.Result.BlacklistId] =
-                        snapshot.Result
-                };
-
-        /*
-         * Vollständige Blacklist-Übersicht
-         * aus dem Referenzkatalog erzeugen.
+         * Es wird kein zusätzliches Dictionary
+         * mit nur einem PSBL-Ergebnis erzeugt.
          *
-         * Nicht integrierte Einträge erhalten
-         * ausschließlich den fachlichen
-         * Status "NotIntegrated".
+         * Dadurch können später mehrere
+         * Blacklist-Ergebnisse gleichzeitig
+         * in der Übersicht erscheinen.
          */
         var overview =
             BlacklistOverviewFactory.Create(
-                latestResults);
+                snapshot.Results);
 
         /*
          * Rückwärtskompatibler API-Vertrag.
          *
          * Alle bisherigen Felder bleiben erhalten.
-         * Insbesondere bleibt "result" weiterhin
-         * das einzelne PSBL-Prüfergebnis.
          *
-         * Das neue Feld "overview" ergänzt
-         * die Antwort um die vollständige
-         * dynamische Blacklist-Übersicht.
+         * Das Feld "result" liefert weiterhin
+         * das bestehende PSBL-Einzelprüfergebnis.
          *
-         * Der WPF-Client kann damit später
-         * beliebig viele Blacklist-Einträge
-         * darstellen, ohne eine feste Liste
-         * im Client hinterlegen zu müssen.
+         * Das Feld "overview" enthält die
+         * vollständige dynamische Übersicht
+         * aller Referenzlisten und der jeweils
+         * vorhandenen Monitoring-Ergebnisse.
+         *
+         * Die tatsächlichen Prüfergebnisse
+         * stammen ausschließlich aus dem
+         * serverseitigen Monitoring-Dienst.
          */
         var response = new
         {

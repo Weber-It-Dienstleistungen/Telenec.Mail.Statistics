@@ -23,13 +23,13 @@ public static class AdminEndpoints
             HandleDashboardAsync);
 
         /*
-         * Neuer Reputation-Endpoint.
+         * Geschützter Reputation-Endpoint.
          *
-         * Liefert ausschließlich den zuletzt
-         * gespeicherten Monitoring-Zustand.
+         * Gibt den zuletzt gespeicherten
+         * Monitoring-Zustand zurück.
          *
-         * Ein API-Aufruf startet keine zusätzliche
-         * DNS- oder Blacklist-Abfrage.
+         * Ein API-Aufruf löst keine zusätzliche
+         * DNS- oder Blacklist-Abfrage aus.
          */
         endpoints.MapGet(
             "/api/v1/admin/reputation",
@@ -73,17 +73,13 @@ public static class AdminEndpoints
     /// Der Zugriff ist durch denselben Admin-API-Schlüssel
     /// geschützt wie die bestehende Nutzungsstatistik.
     ///
-    /// Es werden keine externen Abfragen ausgeführt.
-    ///
-    /// Der Snapshot enthält:
-    /// - konfigurierten Hostnamen
-    /// - erwartete Versand-IP
-    /// - zuletzt aufgelöste IPv4-Adressen
-    /// - letzten Prüfversuch
-    /// - letzten erfolgreichen Prüfzeitpunkt
-    /// - Ergebnis der PSBL-Prüfung
-    ///
     /// Der Endpoint ist ausschließlich lesend.
+    ///
+    /// Der Blacklist-Status wird ausdrücklich als
+    /// sprechender Zeichenfolgenwert zurückgegeben.
+    ///
+    /// Dadurch ist die API nicht von den numerischen
+    /// Enum-Werten des Servers abhängig.
     /// </summary>
     private static IResult HandleReputation(
         HttpRequest request,
@@ -102,6 +98,54 @@ public static class AdminEndpoints
         var snapshot =
             monitoringService.GetSnapshot();
 
-        return Results.Ok(snapshot);
+        /*
+         * Expliziter API-Vertrag.
+         *
+         * Die bestehende Snapshot-Struktur
+         * wird beibehalten.
+         *
+         * Lediglich der Status wird von einem
+         * numerischen Enum in einen stabilen
+         * Namen umgewandelt.
+         *
+         * Die übrigen Felder behalten ihre
+         * bisherigen Datentypen.
+         */
+        var response = new
+        {
+            snapshot.Hostname,
+
+            snapshot.ExpectedIpv4,
+
+            snapshot.ResolvedIpv4Addresses,
+
+            snapshot.LastAttemptUtc,
+
+            snapshot.LastSuccessfulCheckUtc,
+
+            Result = new
+            {
+                snapshot.Result.BlacklistId,
+
+                snapshot.Result.CheckedTarget,
+
+                Status =
+                    snapshot.Result.Status.ToString(),
+
+                snapshot.Result.StartedAtUtc,
+
+                snapshot.Result.CompletedAtUtc,
+
+                snapshot.Result.ProviderResponse,
+
+                snapshot.Result.ErrorMessage,
+
+                snapshot.Result.IsConclusive,
+
+                snapshot.Result.IsListed
+            }
+        };
+
+        return Results.Ok(response);
     }
 }

@@ -1,7 +1,12 @@
-﻿using System.Net.Http;
+﻿
+using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Telenec.Mail.Statistics.Admin.Models;
 using Telenec.Mail.Statistics.Admin.Services;
 
 namespace Telenec.Mail.Statistics.Admin.ViewModels;
@@ -27,6 +32,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string ApplicationVersionText =>
         $"Telenec Mail · {GetApplicationVersion()}";
+
+    /*
+     * Bestehende Statistikberechnungen.
+     *
+     * Diese bleiben unverändert.
+     */
 
     public double ActiveTodayPercentage =>
         GetPercentage(
@@ -98,6 +109,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ActiveDays8To30,
             ActiveDays8To30Percentage);
 
+    /*
+     * Bestehende Eigenschaften der Nutzungsstatistik.
+     */
+
     [ObservableProperty]
     private string statusText =
         "Daten werden geladen …";
@@ -124,6 +139,71 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private int inactiveOver30Days;
 
+    /*
+     * Neue Eigenschaften für die Mailserver-Reputation.
+     *
+     * Die Darstellung wird im folgenden Sprint
+     * mit diesen Eigenschaften verbunden.
+     *
+     * Aktuell ist ausschließlich PSBL angebunden.
+     */
+
+    public string ReputationTitle =>
+        "Mailserver-Reputation";
+
+    public string ReputationScopeText =>
+        "1 von 68 Referenzlisten angebunden – PSBL";
+
+    [ObservableProperty]
+    private bool isReputationLoading;
+
+    [ObservableProperty]
+    private string reputationStatusKind =
+        "NotChecked";
+
+    [ObservableProperty]
+    private string reputationStatusText =
+        "Noch keine Reputationsdaten geladen.";
+
+    [ObservableProperty]
+    private string reputationHostname =
+        "Nicht verfügbar";
+
+    [ObservableProperty]
+    private string reputationIpAddress =
+        "Nicht verfügbar";
+
+    [ObservableProperty]
+    private string reputationResolvedAddresses =
+        "Nicht verfügbar";
+
+    [ObservableProperty]
+    private string reputationBlacklistName =
+        "PSBL";
+
+    [ObservableProperty]
+    private string reputationLastAttemptText =
+        "Noch keine Prüfung";
+
+    [ObservableProperty]
+    private string reputationLastSuccessfulCheckText =
+        "Noch keine erfolgreiche Prüfung";
+
+    [ObservableProperty]
+    private string reputationProviderResponse =
+        "Keine";
+
+    [ObservableProperty]
+    private string reputationDetailText =
+        "Die Überwachung wird geladen.";
+
+    /*
+     * Gemeinsamer Ladeeinstieg.
+     *
+     * MainWindow.xaml.cs verwendet bereits LoadAsync.
+     * Eine Anpassung des Code-behind ist nicht nötig.
+     */
+
     public async Task LoadAsync(
         CancellationToken cancellationToken = default)
     {
@@ -131,8 +211,38 @@ public sealed partial class MainWindowViewModel : ObservableObject
             cancellationToken);
     }
 
+    /*
+     * Gemeinsame Aktualisierung.
+     *
+     * Die beiden Datenbereiche werden unabhängig
+     * voneinander geladen.
+     *
+     * Ein Fehler der Reputationsabfrage
+     * verändert niemals die Statistikkennzahlen.
+     *
+     * Der vorhandene Aktualisieren-Button
+     * verwendet weiterhin RefreshCommand.
+     */
+
     [RelayCommand(AllowConcurrentExecutions = false)]
     private async Task RefreshAsync(
+        CancellationToken cancellationToken)
+    {
+        await LoadStatisticsAsync(
+            cancellationToken);
+
+        await LoadReputationAsync(
+            cancellationToken);
+    }
+
+    /*
+     * Bestehende Nutzungsstatistik.
+     *
+     * Die bisherige Lade- und Fehlerbehandlung
+     * bleibt fachlich unverändert.
+     */
+
+    private async Task LoadStatisticsAsync(
         CancellationToken cancellationToken)
     {
         IsLoading = true;
@@ -164,6 +274,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             RaiseChartPropertiesChanged();
 
             StatusKind = "Success";
+
             StatusText =
                 $"Daten erfolgreich geladen – {DateTime.Now:dd.MM.yyyy HH:mm:ss}";
         }
@@ -196,6 +307,312 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsLoading = false;
         }
     }
+
+    /*
+     * Neue Reputationsabfrage.
+     *
+     * Dieser Bereich besitzt eine eigene
+     * Status- und Fehlerverwaltung.
+     *
+     * Dadurch bleiben die bestehenden
+     * Nutzungsstatistikdaten unabhängig.
+     */
+
+    private async Task LoadReputationAsync(
+        CancellationToken cancellationToken)
+    {
+        IsReputationLoading = true;
+
+        /*
+         * Frühere Ergebnisse werden zunächst
+         * zurückgesetzt.
+         *
+         * Dadurch darf beispielsweise ein
+         * früherer grüner Status nicht stehen
+         * bleiben, wenn der aktuelle Abruf
+         * fehlschlägt.
+         */
+
+        ReputationStatusKind = "Loading";
+
+        ReputationStatusText =
+            "Reputationsdaten werden geladen …";
+
+        ReputationHostname = "Nicht verfügbar";
+        ReputationIpAddress = "Nicht verfügbar";
+
+        ReputationResolvedAddresses =
+            "Nicht verfügbar";
+
+        ReputationBlacklistName = "PSBL";
+
+        ReputationLastAttemptText =
+            "Nicht verfügbar";
+
+        ReputationLastSuccessfulCheckText =
+            "Nicht verfügbar";
+
+        ReputationProviderResponse = "Keine";
+
+        ReputationDetailText =
+            "Aktueller Monitoring-Zustand wird abgerufen.";
+
+        try
+        {
+            var reputation =
+                await _statisticsClient
+                    .GetReputationAsync(
+                        cancellationToken);
+
+            ApplyReputation(
+                reputation);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            SetReputationError(
+                "Zugriff verweigert",
+                "Der Admin-API-Schlüssel wurde vom Server abgelehnt.");
+        }
+        catch (HttpRequestException exception)
+            when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            SetReputationError(
+                "Reputations-API nicht verfügbar",
+                "Der angesprochene Statistikserver unterstützt den Reputations-Endpunkt noch nicht.");
+        }
+        catch (HttpRequestException)
+        {
+            SetReputationError(
+                "Reputationsserver nicht erreichbar",
+                "Die Reputationsdaten konnten nicht vom Statistikserver abgerufen werden.");
+        }
+        catch (TaskCanceledException)
+        {
+            SetReputationError(
+                "Zeitüberschreitung",
+                "Die Reputationsabfrage hat zu lange gedauert.");
+        }
+        catch (JsonException)
+        {
+            SetReputationError(
+                "Ungültige API-Antwort",
+                "Der Statistikserver hat Reputationsdaten in einem unbekannten Format geliefert.");
+        }
+        catch (InvalidDataException)
+        {
+            SetReputationError(
+                "Unvollständige API-Antwort",
+                "Die Reputationsdaten des Statistikservers sind unvollständig.");
+        }
+        catch (Exception)
+        {
+            SetReputationError(
+                "Reputationsabfrage fehlgeschlagen",
+                "Beim Laden der Mailserver-Reputation ist ein unerwarteter Fehler aufgetreten.");
+        }
+        finally
+        {
+            IsReputationLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Übernimmt einen gültig empfangenen
+    /// Monitoring-Snapshot in die Eigenschaften
+    /// der WPF-Oberfläche.
+    ///
+    /// Der Listungsstatus wird ausdrücklich
+    /// nur für die geprüfte Einzelliste bewertet.
+    /// </summary>
+    private void ApplyReputation(
+        ReputationMonitoringResponse reputation)
+    {
+        ReputationHostname =
+            reputation.Hostname;
+
+        ReputationIpAddress =
+            reputation.ExpectedIpv4;
+
+        ReputationResolvedAddresses =
+            reputation.ResolvedIpv4Addresses is { Count: > 0 }
+                ? string.Join(
+                    ", ",
+                    reputation.ResolvedIpv4Addresses)
+                : "Keine IPv4-Adresse ermittelt";
+
+        ReputationBlacklistName =
+            reputation.Result.BlacklistId;
+
+        ReputationLastAttemptText =
+            FormatDate(
+                reputation.LastAttemptUtc);
+
+        ReputationLastSuccessfulCheckText =
+            FormatDate(
+                reputation.LastSuccessfulCheckUtc);
+
+        ReputationProviderResponse =
+            string.IsNullOrWhiteSpace(
+                reputation.Result.ProviderResponse)
+                ? "Keine"
+                : reputation.Result.ProviderResponse;
+
+        var result = reputation.Result;
+
+        /*
+         * Der Status und IsListed müssen
+         * fachlich zueinander passen.
+         *
+         * Widersprüchliche Angaben werden
+         * nicht als erfolgreich bewertet.
+         */
+
+        switch (result.Status)
+        {
+            case "NotListed"
+                when result.IsConclusive
+                     && result.IsListed == false:
+
+                ReputationStatusKind = "Success";
+
+                ReputationStatusText =
+                    "PSBL: Nicht gelistet";
+
+                ReputationDetailText =
+                    "Die geprüfte Versand-IP ist bei PSBL nicht gelistet. " +
+                    "Dies ist keine Aussage über die übrigen 67 Referenzlisten.";
+
+                break;
+
+            case "Listed"
+                when result.IsConclusive
+                     && result.IsListed == true:
+
+                ReputationStatusKind = "Error";
+
+                ReputationStatusText =
+                    "PSBL: Blacklist-Eintrag erkannt";
+
+                ReputationDetailText =
+                    "Die geprüfte Versand-IP ist bei PSBL gelistet. " +
+                    "Der Eintrag sollte administrativ untersucht werden.";
+
+                break;
+
+            case "NotChecked":
+
+                ReputationStatusKind = "NotChecked";
+
+                ReputationStatusText =
+                    "Noch keine Blacklist-Prüfung";
+
+                ReputationDetailText =
+                    "Der Monitoring-Dienst hat noch kein Prüfergebnis bereitgestellt.";
+
+                break;
+
+            case "Failed":
+
+                ReputationStatusKind = "Warning";
+
+                ReputationStatusText =
+                    "PSBL-Prüfung fehlgeschlagen";
+
+                ReputationDetailText =
+                    GetErrorDescription(
+                        result.ErrorMessage,
+                        "Die Blacklist-Prüfung konnte nicht erfolgreich abgeschlossen werden.");
+
+                break;
+
+            case "AccessDenied":
+
+                ReputationStatusKind = "Warning";
+
+                ReputationStatusText =
+                    "PSBL-Zugriff verweigert";
+
+                ReputationDetailText =
+                    GetErrorDescription(
+                        result.ErrorMessage,
+                        "Der Prüfanbieter hat den Zugriff nicht zugelassen.");
+
+                break;
+
+            case "Unknown":
+
+                ReputationStatusKind = "Warning";
+
+                ReputationStatusText =
+                    "PSBL-Ergebnis unbekannt";
+
+                ReputationDetailText =
+                    GetErrorDescription(
+                        result.ErrorMessage,
+                        "Die Antwort des Prüfanbieters konnte nicht eindeutig ausgewertet werden.");
+
+                break;
+
+            default:
+
+                ReputationStatusKind = "Warning";
+
+                ReputationStatusText =
+                    "Reputationsstatus nicht eindeutig";
+
+                ReputationDetailText =
+                    "Der Statistikserver hat einen unbekannten oder widersprüchlichen Prüfstatus geliefert.";
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Setzt einen eigenen Fehlerzustand
+    /// für die Reputationsanzeige.
+    ///
+    /// Die Nutzungsstatistik wird dadurch
+    /// nicht beeinflusst.
+    /// </summary>
+    private void SetReputationError(
+        string status,
+        string description)
+    {
+        ReputationStatusKind = "Error";
+        ReputationStatusText = status;
+        ReputationDetailText = description;
+    }
+
+    private static string GetErrorDescription(
+        string? providerError,
+        string fallback)
+    {
+        return string.IsNullOrWhiteSpace(providerError)
+            ? fallback
+            : providerError;
+    }
+
+    /// <summary>
+    /// UTC-Zeitpunkte werden für die Anzeige
+    /// in die lokale Zeitzone umgerechnet.
+    /// </summary>
+    private static string FormatDate(
+        DateTimeOffset? timestamp)
+    {
+        if (!timestamp.HasValue)
+        {
+            return "Noch keine Prüfung";
+        }
+
+        return timestamp.Value
+            .ToLocalTime()
+            .ToString("dd.MM.yyyy HH:mm:ss");
+    }
+
+    /*
+     * Bestehende Benachrichtigungen
+     * für die Statistikdiagramme.
+     */
 
     private void RaiseChartPropertiesChanged()
     {

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿
+using Microsoft.Extensions.Configuration;
 
 namespace Telenec.Mail.Statistics.Admin.Configuration;
 
@@ -22,6 +23,28 @@ public sealed class AdminApiBaseUrlProvider :
     public async Task<Uri> GetBaseUriAsync(
         CancellationToken cancellationToken = default)
     {
+        /*
+         * Lokaler Entwicklungsmodus.
+         *
+         * Diese Prüfung erfolgt vor dem Zugriff
+         * auf die gespeicherte Produktivadresse.
+         *
+         * Die Entwicklungsadresse ist fest
+         * auf localhost:5097 beschränkt.
+         */
+        if (LocalDevelopmentApiOverride.IsActive)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return LocalDevelopmentApiOverride.BaseUri;
+        }
+
+        /*
+         * Bestehender Normalbetrieb.
+         *
+         * Gespeicherte Serveradressen besitzen
+         * weiterhin Vorrang vor der Konfiguration.
+         */
         var storedBaseUrl =
             await _baseUrlStore.ReadAsync(
                 cancellationToken);
@@ -54,6 +77,29 @@ public sealed class AdminApiBaseUrlProvider :
     {
         ArgumentNullException.ThrowIfNull(baseUri);
 
+        /*
+         * Im Entwicklungsmodus dürfen niemals
+         * Testadressen in der produktiven
+         * Konfiguration gespeichert werden.
+         */
+        if (LocalDevelopmentApiOverride.IsActive)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!LocalDevelopmentApiOverride.BaseUri.Equals(
+                    baseUri))
+            {
+                throw new InvalidOperationException(
+                    "Die verwendete Serveradresse stimmt nicht mit dem lokalen Entwicklungsmodus überein.");
+            }
+
+            return;
+        }
+
+        /*
+         * Bestehendes Speicherverhalten
+         * für den Normalbetrieb.
+         */
         var validatedBaseUri =
             ValidateAndNormalizeBaseUri(
                 baseUri.AbsoluteUri,

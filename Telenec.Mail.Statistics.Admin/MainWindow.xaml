@@ -36,6 +36,8 @@
         <SolidColorBrush x:Key="InactiveBrush"
                          Color="#F59E0B" />
 
+        <!-- Bestehende Dashboard-Karten -->
+
         <Style x:Key="DashboardCard"
                TargetType="Border">
             <Setter Property="Background"
@@ -80,6 +82,8 @@
                     Value="0,8,0,0" />
         </Style>
 
+        <!-- Bestehende Diagramm-Styles -->
+
         <Style x:Key="ChartProgressBar"
                TargetType="ProgressBar">
             <Setter Property="Height"
@@ -119,6 +123,8 @@
             <Setter Property="VerticalAlignment"
                     Value="Center" />
         </Style>
+
+        <!-- Bestehende Statistik-Statusanzeige -->
 
         <Style x:Key="StatusBorderStyle"
                TargetType="Border">
@@ -186,19 +192,135 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Neue Reputations-Styles -->
+
+        <Style x:Key="ReputationStatusBorder"
+               TargetType="Border">
+
+            <Setter Property="Background"
+                    Value="#EFF6FF" />
+            <Setter Property="BorderBrush"
+                    Value="#BFDBFE" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+            <Setter Property="CornerRadius"
+                    Value="12" />
+            <Setter Property="Padding"
+                    Value="22" />
+
+            <Style.Triggers>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Success">
+                    <Setter Property="Background"
+                            Value="#F0FDF4" />
+                    <Setter Property="BorderBrush"
+                            Value="#BBF7D0" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Warning">
+                    <Setter Property="Background"
+                            Value="#FFF7ED" />
+                    <Setter Property="BorderBrush"
+                            Value="#FED7AA" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Error">
+                    <Setter Property="Background"
+                            Value="#FEF2F2" />
+                    <Setter Property="BorderBrush"
+                            Value="#FECACA" />
+                </DataTrigger>
+
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ReputationStatusText"
+               TargetType="TextBlock">
+
+            <Setter Property="FontSize"
+                    Value="25" />
+            <Setter Property="FontWeight"
+                    Value="SemiBold" />
+            <Setter Property="Foreground"
+                    Value="#1D4ED8" />
+            <Setter Property="TextWrapping"
+                    Value="Wrap" />
+
+            <Style.Triggers>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Success">
+                    <Setter Property="Foreground"
+                            Value="#166534" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Warning">
+                    <Setter Property="Foreground"
+                            Value="#9A3412" />
+                </DataTrigger>
+
+                <DataTrigger Binding="{Binding ReputationStatusKind}"
+                             Value="Error">
+                    <Setter Property="Foreground"
+                            Value="#991B1B" />
+                </DataTrigger>
+
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ReputationFieldLabel"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="12" />
+            <Setter Property="Foreground"
+                    Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="Margin"
+                    Value="0,0,0,6" />
+        </Style>
+
+        <Style x:Key="ReputationFieldValue"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="17" />
+            <Setter Property="FontWeight"
+                    Value="SemiBold" />
+            <Setter Property="Foreground"
+                    Value="{StaticResource PrimaryTextBrush}" />
+            <Setter Property="TextWrapping"
+                    Value="Wrap" />
+        </Style>
+
+        <Style x:Key="ReputationCard"
+               TargetType="Border">
+            <Setter Property="Background"
+                    Value="White" />
+            <Setter Property="CornerRadius"
+                    Value="12" />
+            <Setter Property="Padding"
+                    Value="20" />
+            <Setter Property="BorderBrush"
+                    Value="#E2E8F0" />
+            <Setter Property="BorderThickness"
+                    Value="1" />
+        </Style>
+
     </Window.Resources>
+
+    <!-- Gemeinsames Fensterlayout -->
 
     <Grid Margin="28">
 
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="18" />
-            <RowDefinition Height="150" />
-            <RowDefinition Height="18" />
+            <RowDefinition Height="16" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="18" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+
+        <!-- Kopfbereich -->
 
         <Grid Grid.Row="0">
 
@@ -241,398 +363,660 @@
 
         </Grid>
 
-        <Grid Grid.Row="2">
+        <!-- Navigation -->
 
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.15*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <TabControl Grid.Row="2"
+                    Background="Transparent"
+                    BorderBrush="#E2E8F0"
+                    FontSize="14">
 
-            <Border Grid.Column="0"
-                    Style="{StaticResource DashboardCard}">
+            <!-- Registerkarte Nutzungsstatistik -->
 
-                <StackPanel VerticalAlignment="Center">
+            <TabItem Header="Nutzungsstatistik"
+                     Padding="18,9">
 
-                    <TextBlock Text="{Binding TotalInstallations}"
-                               FontSize="44"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource PrimaryBrush}"
-                               HorizontalAlignment="Center" />
-
-                    <TextBlock Text="Installationen insgesamt"
-                               Style="{StaticResource MetricLabel}"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource PrimaryTextBrush}" />
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Column="1"
-                    Style="{StaticResource DashboardCard}">
-
-                <StackPanel VerticalAlignment="Center">
-
-                    <TextBlock Text="{Binding ActiveToday}"
-                               Style="{StaticResource MetricValue}" />
-
-                    <TextBlock Text="Heute aktiv"
-                               Style="{StaticResource MetricLabel}" />
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Column="2"
-                    Style="{StaticResource DashboardCard}">
-
-                <StackPanel VerticalAlignment="Center">
-
-                    <TextBlock Text="{Binding ActiveLast7Days}"
-                               Style="{StaticResource MetricValue}" />
-
-                    <TextBlock Text="Letzte 7 Tage"
-                               Style="{StaticResource MetricLabel}" />
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Column="3"
-                    Style="{StaticResource DashboardCard}">
-
-                <StackPanel VerticalAlignment="Center">
-
-                    <TextBlock Text="{Binding ActiveLast30Days}"
-                               Style="{StaticResource MetricValue}" />
-
-                    <TextBlock Text="Letzte 30 Tage"
-                               Style="{StaticResource MetricLabel}" />
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Column="4"
-                    Style="{StaticResource DashboardCard}">
-
-                <StackPanel VerticalAlignment="Center">
-
-                    <TextBlock Text="{Binding InactiveOver30Days}"
-                               Style="{StaticResource MetricValue}" />
-
-                    <TextBlock Text="Über 30 Tage inaktiv"
-                               Style="{StaticResource MetricLabel}" />
-
-                </StackPanel>
-
-            </Border>
-
-        </Grid>
-
-        <Grid Grid.Row="4">
-
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="18" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0"
-                    Style="{StaticResource DashboardCard}"
-                    Margin="0">
-
-                <Grid>
+                <Grid Margin="12,16,12,12">
 
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="8" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="22" />
+                        <RowDefinition Height="150" />
+                        <RowDefinition Height="18" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="18" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0"
-                               Text="Aktivität nach Zeitraum"
-                               FontSize="19"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource PrimaryTextBrush}" />
+                    <!-- Bestehende Kennzahlen -->
 
-                    <TextBlock Grid.Row="2"
-                               Text="Kumulative Reichweite bezogen auf alle Installationen"
-                               FontSize="12"
-                               Foreground="{StaticResource SecondaryTextBrush}" />
+                    <Grid Grid.Row="0">
 
-                    <Grid Grid.Row="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.15*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                        <Border Grid.Column="0"
+                                Style="{StaticResource DashboardCard}">
 
-                        <Grid Grid.Row="0"
-                              Margin="0,4">
+                            <StackPanel VerticalAlignment="Center">
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding TotalInstallations}"
+                                           FontSize="44"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryBrush}"
+                                           HorizontalAlignment="Center" />
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Heute"
-                                       Style="{StaticResource ChartLabel}" />
+                                <TextBlock Text="Installationen insgesamt"
+                                           Style="{StaticResource MetricLabel}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveTodayPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource TodayBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                            </StackPanel>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveTodayChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                        </Border>
 
-                        </Grid>
+                        <Border Grid.Column="1"
+                                Style="{StaticResource DashboardCard}">
 
-                        <Grid Grid.Row="1"
-                              Margin="0,4">
+                            <StackPanel VerticalAlignment="Center">
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding ActiveToday}"
+                                           Style="{StaticResource MetricValue}" />
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Letzte 7 Tage"
-                                       Style="{StaticResource ChartLabel}" />
+                                <TextBlock Text="Heute aktiv"
+                                           Style="{StaticResource MetricLabel}" />
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveLast7DaysPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource WeekBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                            </StackPanel>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveLast7DaysChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                        </Border>
 
-                        </Grid>
+                        <Border Grid.Column="2"
+                                Style="{StaticResource DashboardCard}">
 
-                        <Grid Grid.Row="2"
-                              Margin="0,4">
+                            <StackPanel VerticalAlignment="Center">
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding ActiveLast7Days}"
+                                           Style="{StaticResource MetricValue}" />
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Letzte 30 Tage"
-                                       Style="{StaticResource ChartLabel}" />
+                                <TextBlock Text="Letzte 7 Tage"
+                                           Style="{StaticResource MetricLabel}" />
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveLast30DaysPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource MonthBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                            </StackPanel>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveLast30DaysChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                        </Border>
 
-                        </Grid>
+                        <Border Grid.Column="3"
+                                Style="{StaticResource DashboardCard}">
 
-                        <Grid Grid.Row="3"
-                              Margin="0,4">
+                            <StackPanel VerticalAlignment="Center">
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding ActiveLast30Days}"
+                                           Style="{StaticResource MetricValue}" />
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Über 30 Tage"
-                                       Style="{StaticResource ChartLabel}" />
+                                <TextBlock Text="Letzte 30 Tage"
+                                           Style="{StaticResource MetricLabel}" />
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding InactiveOver30DaysPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource InactiveBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                            </StackPanel>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding InactiveOver30DaysChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                        </Border>
 
-                        </Grid>
+                        <Border Grid.Column="4"
+                                Style="{StaticResource DashboardCard}">
+
+                            <StackPanel VerticalAlignment="Center">
+
+                                <TextBlock Text="{Binding InactiveOver30Days}"
+                                           Style="{StaticResource MetricValue}" />
+
+                                <TextBlock Text="Über 30 Tage inaktiv"
+                                           Style="{StaticResource MetricLabel}" />
+
+                            </StackPanel>
+
+                        </Border>
 
                     </Grid>
 
-                </Grid>
+                    <!-- Bestehende Diagramme -->
 
-            </Border>
+                    <Grid Grid.Row="2">
 
-            <Border Grid.Column="2"
-                    Style="{StaticResource DashboardCard}"
-                    Margin="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                <Grid>
+                        <!-- Diagramm 1 -->
 
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="8" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="22" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                        <Border Grid.Column="0"
+                                Style="{StaticResource DashboardCard}"
+                                Margin="0">
 
-                    <TextBlock Grid.Row="0"
-                               Text="Verteilung nach letztem Kontakt"
-                               FontSize="19"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource PrimaryTextBrush}" />
+                            <Grid>
 
-                    <TextBlock Grid.Row="2"
-                               Text="Jede Installation erscheint genau in einer Gruppe"
-                               FontSize="12"
-                               Foreground="{StaticResource SecondaryTextBrush}" />
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="8" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="22" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="4">
+                                <TextBlock Grid.Row="0"
+                                           Text="Aktivität nach Zeitraum"
+                                           FontSize="19"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
 
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="2"
+                                           Text="Kumulative Reichweite bezogen auf alle Installationen"
+                                           FontSize="12"
+                                           Foreground="{StaticResource SecondaryTextBrush}" />
 
-                        <Grid Grid.Row="0"
-                              Margin="0,4">
+                                <Grid Grid.Row="4">
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Heute"
-                                       Style="{StaticResource ChartLabel}" />
+                                    <Grid Grid.Row="0"
+                                          Margin="0,4">
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveTodayPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource TodayBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveTodayChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Heute"
+                                                   Style="{StaticResource ChartLabel}" />
 
-                        </Grid>
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveTodayPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource TodayBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
 
-                        <Grid Grid.Row="1"
-                              Margin="0,4">
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveTodayChartText}"
+                                                   Style="{StaticResource ChartValue}" />
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                    </Grid>
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Vor 1–7 Tagen"
-                                       Style="{StaticResource ChartLabel}" />
+                                    <Grid Grid.Row="1"
+                                          Margin="0,4">
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveDays1To7Percentage, Mode=OneWay}"
-                                         Foreground="{StaticResource WeekBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveDays1To7ChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Letzte 7 Tage"
+                                                   Style="{StaticResource ChartLabel}" />
 
-                        </Grid>
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveLast7DaysPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource WeekBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
 
-                        <Grid Grid.Row="2"
-                              Margin="0,4">
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveLast7DaysChartText}"
+                                                   Style="{StaticResource ChartValue}" />
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                    </Grid>
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Vor 8–30 Tagen"
-                                       Style="{StaticResource ChartLabel}" />
+                                    <Grid Grid.Row="2"
+                                          Margin="0,4">
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding ActiveDays8To30Percentage, Mode=OneWay}"
-                                         Foreground="{StaticResource MonthBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding ActiveDays8To30ChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Letzte 30 Tage"
+                                                   Style="{StaticResource ChartLabel}" />
 
-                        </Grid>
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveLast30DaysPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource MonthBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
 
-                        <Grid Grid.Row="3"
-                              Margin="0,4">
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveLast30DaysChartText}"
+                                                   Style="{StaticResource ChartValue}" />
 
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
-                            </Grid.ColumnDefinitions>
+                                    </Grid>
 
-                            <TextBlock Grid.Column="0"
-                                       Text="Über 30 Tage"
-                                       Style="{StaticResource ChartLabel}" />
+                                    <Grid Grid.Row="3"
+                                          Margin="0,4">
 
-                            <ProgressBar Grid.Column="1"
-                                         Value="{Binding InactiveOver30DaysPercentage, Mode=OneWay}"
-                                         Foreground="{StaticResource InactiveBrush}"
-                                         Style="{StaticResource ChartProgressBar}"
-                                         Margin="10,0" />
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding InactiveOver30DaysChartText}"
-                                       Style="{StaticResource ChartValue}" />
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Über 30 Tage"
+                                                   Style="{StaticResource ChartLabel}" />
 
-                        </Grid>
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding InactiveOver30DaysPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource InactiveBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding InactiveOver30DaysChartText}"
+                                                   Style="{StaticResource ChartValue}" />
+
+                                    </Grid>
+
+                                </Grid>
+
+                            </Grid>
+
+                        </Border>
+
+                        <!-- Diagramm 2 -->
+
+                        <Border Grid.Column="2"
+                                Style="{StaticResource DashboardCard}"
+                                Margin="0">
+
+                            <Grid>
+
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="8" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="22" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0"
+                                           Text="Verteilung nach letztem Kontakt"
+                                           FontSize="19"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+
+                                <TextBlock Grid.Row="2"
+                                           Text="Jede Installation erscheint genau in einer Gruppe"
+                                           FontSize="12"
+                                           Foreground="{StaticResource SecondaryTextBrush}" />
+
+                                <Grid Grid.Row="4">
+
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0"
+                                          Margin="0,4">
+
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Heute"
+                                                   Style="{StaticResource ChartLabel}" />
+
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveTodayPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource TodayBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveTodayChartText}"
+                                                   Style="{StaticResource ChartValue}" />
+
+                                    </Grid>
+
+                                    <Grid Grid.Row="1"
+                                          Margin="0,4">
+
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Vor 1–7 Tagen"
+                                                   Style="{StaticResource ChartLabel}" />
+
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveDays1To7Percentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource WeekBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveDays1To7ChartText}"
+                                                   Style="{StaticResource ChartValue}" />
+
+                                    </Grid>
+
+                                    <Grid Grid.Row="2"
+                                          Margin="0,4">
+
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Vor 8–30 Tagen"
+                                                   Style="{StaticResource ChartLabel}" />
+
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding ActiveDays8To30Percentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource MonthBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ActiveDays8To30ChartText}"
+                                                   Style="{StaticResource ChartValue}" />
+
+                                    </Grid>
+
+                                    <Grid Grid.Row="3"
+                                          Margin="0,4">
+
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Über 30 Tage"
+                                                   Style="{StaticResource ChartLabel}" />
+
+                                        <ProgressBar Grid.Column="1"
+                                                     Value="{Binding InactiveOver30DaysPercentage, Mode=OneWay}"
+                                                     Foreground="{StaticResource InactiveBrush}"
+                                                     Style="{StaticResource ChartProgressBar}"
+                                                     Margin="10,0" />
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding InactiveOver30DaysChartText}"
+                                                   Style="{StaticResource ChartValue}" />
+
+                                    </Grid>
+
+                                </Grid>
+
+                            </Grid>
+
+                        </Border>
 
                     </Grid>
 
+                    <!-- Bestehende Statuszeile -->
+
+                    <Border Grid.Row="4"
+                            Style="{StaticResource StatusBorderStyle}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12,8">
+
+                        <TextBlock Text="{Binding StatusText}"
+                                   Style="{StaticResource StatusTextStyle}" />
+
+                    </Border>
+
                 </Grid>
 
-            </Border>
+            </TabItem>
 
-        </Grid>
+            <!-- Registerkarte Mailserver-Reputation -->
 
-        <Border Grid.Row="6"
-                Style="{StaticResource StatusBorderStyle}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="12,8">
+            <TabItem Header="Mailserver-Reputation"
+                     Padding="18,9">
 
-            <TextBlock Text="{Binding StatusText}"
-                       Style="{StaticResource StatusTextStyle}" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
 
-        </Border>
+                    <StackPanel Margin="18,20,18,24">
+
+                        <!-- Bereichstitel -->
+
+                        <TextBlock Text="{Binding ReputationTitle}"
+                                   FontSize="24"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryTextBrush}" />
+
+                        <TextBlock Text="Überwachung der öffentlichen Mailserver-Reputation"
+                                   FontSize="13"
+                                   Margin="0,5,0,12"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+
+                        <!-- Abdeckungsinformation -->
+
+                        <Border Background="#EFF6FF"
+                                BorderBrush="#BFDBFE"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14,10"
+                                Margin="0,0,0,18">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="Prüfumfang: "
+                                           FontWeight="SemiBold"
+                                           Foreground="#1D4ED8" />
+
+                                <TextBlock Text="{Binding ReputationScopeText}"
+                                           Foreground="#1D4ED8" />
+
+                            </StackPanel>
+
+                        </Border>
+
+                        <!-- Aktueller PSBL-Status -->
+
+                        <Border Style="{StaticResource ReputationStatusBorder}"
+                                Margin="0,0,0,18">
+
+                            <StackPanel>
+
+                                <TextBlock Text="AKTUELLER PRÜFSTATUS"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           Margin="0,0,0,10" />
+
+                                <TextBlock Text="{Binding ReputationStatusText}"
+                                           Style="{StaticResource ReputationStatusText}" />
+
+                                <TextBlock Text="{Binding ReputationDetailText}"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"
+                                           Margin="0,12,0,0"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+
+                            </StackPanel>
+
+                        </Border>
+
+                        <!-- Serverinformationen -->
+
+                        <Grid Margin="0,0,0,18">
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ReputationCard}">
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Überwachter Mailserver"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+
+                                    <TextBlock Text="{Binding ReputationHostname}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                    <TextBlock Text="DNS-Auflösung"
+                                               Style="{StaticResource ReputationFieldLabel}"
+                                               Margin="0,18,0,6" />
+
+                                    <TextBlock Text="{Binding ReputationResolvedAddresses}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource ReputationCard}">
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Öffentliche Versand-IP"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+
+                                    <TextBlock Text="{Binding ReputationIpAddress}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                    <TextBlock Text="Aktive Prüfliste"
+                                               Style="{StaticResource ReputationFieldLabel}"
+                                               Margin="0,18,0,6" />
+
+                                    <TextBlock Text="{Binding ReputationBlacklistName}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                        </Grid>
+
+                        <!-- Zeitstempel -->
+
+                        <Grid Margin="0,0,0,18">
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ReputationCard}">
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Letzter Prüfversuch"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+
+                                    <TextBlock Text="{Binding ReputationLastAttemptText}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource ReputationCard}">
+
+                                <StackPanel>
+
+                                    <TextBlock Text="Letzte erfolgreiche Prüfung"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+
+                                    <TextBlock Text="{Binding ReputationLastSuccessfulCheckText}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+
+                                </StackPanel>
+
+                            </Border>
+
+                        </Grid>
+
+                        <!-- Technische Details -->
+
+                        <Border Style="{StaticResource ReputationCard}"
+                                Margin="0,0,0,18">
+
+                            <StackPanel>
+
+                                <TextBlock Text="Technische Prüfinformationen"
+                                           FontSize="17"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}"
+                                           Margin="0,0,0,14" />
+
+                                <TextBlock Text="Antwort des Prüfanbieters"
+                                           Style="{StaticResource ReputationFieldLabel}" />
+
+                                <TextBlock Text="{Binding ReputationProviderResponse}"
+                                           FontSize="14"
+                                           FontFamily="Consolas"
+                                           Foreground="{StaticResource PrimaryTextBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,16" />
+
+                                <TextBlock Text="Prüfintervall"
+                                           Style="{StaticResource ReputationFieldLabel}" />
+
+                                <TextBlock Text="15 Minuten – serverseitige automatische Prüfung"
+                                           FontSize="13"
+                                           Foreground="{StaticResource PrimaryTextBrush}"
+                                           TextWrapping="Wrap" />
+
+                            </StackPanel>
+
+                        </Border>
+
+                        <!-- Hinweis zum Projektstand -->
+
+                        <Border Background="#F8FAFC"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14,12">
+
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                       Text="Hinweis: Dies ist die erste Ausbaustufe der Mailserver-Reputationsüberwachung. Ein erfolgreiches PSBL-Ergebnis bedeutet nicht, dass die Versand-IP bei allen anderen Blacklists ebenfalls unbelastet ist. Weitere Prüfanbieter werden nach technischer und rechtlicher Freigabe integriert." />
+
+                        </Border>
+
+                    </StackPanel>
+
+                </ScrollViewer>
+
+            </TabItem>
+
+        </TabControl>
 
     </Grid>
 

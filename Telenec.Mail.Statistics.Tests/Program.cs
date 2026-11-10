@@ -31,6 +31,17 @@ internal static class Program
         new("uceprotectl3", "dnsbl-3.uceprotect.net", "127.0.0.2")
     };
 
+    private static readonly string[] ActiveBlacklistIds =
+    {
+        "psbl",
+        "0spam",
+        "0spam-rbl",
+        "uceprotectl1",
+        "blocklist-de",
+        "uceprotectl2",
+        "uceprotectl3"
+    };
+
     private static async Task<int> Main()
     {
         var passed = 0;
@@ -266,6 +277,44 @@ internal static class Program
         await Test(
             "blocklist.de: höherer Listungscode",
             CheckBlocklistDeCodeAsync);
+
+        // ================================================
+        // Sprint 30:
+        // Neue Regressionstests für den Referenzkatalog.
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30");
+        Console.WriteLine();
+
+        await Test(
+            "68 eindeutige Referenzeinträge",
+            CheckCatalogStructureAsync);
+
+        await Test(
+            "Rückwärtskompatibler Katalog-Konstruktor",
+            CheckLegacyCatalogConstructorAsync);
+
+        await Test(
+            "Metadaten der sieben aktiven Listen",
+            CheckActiveCatalogMetadataAsync);
+
+        await Test(
+            "Domain- und URI-Prüfarten",
+            CheckDomainAndUriMetadataAsync);
+
+        await Test(
+            "UCEPROTECT: IP-, Netz- und ASN-Bewertung",
+            CheckUceProtectScopesAsync);
+
+        await Test(
+            "Eingestellte Quellen bleiben dokumentiert",
+            CheckDiscontinuedSourcesAsync);
+
+        await Test(
+            "Übersicht mit sieben simulierten Ergebnissen",
+            CheckCatalogOverviewAsync);
 
         Console.WriteLine();
         Console.WriteLine(
@@ -1004,8 +1053,459 @@ internal static class Program
     }
 
     // ===================================================
+    // Sprint 30 – Katalog-Regressionstests
+    // ===================================================
+
+    /// <summary>
+    /// Sichert die vollständige Referenzmenge.
+    ///
+    /// Einträge dürfen bei der Weiterentwicklung
+    /// weder verloren gehen noch mehrfach
+    /// registriert werden.
+    /// </summary>
+    private static Task CheckCatalogStructureAsync()
+    {
+        var entries = BlacklistCatalog.Entries;
+
+        Assert(
+            entries.Count == 68,
+            $"Erwartet 68 Einträge, erhalten {entries.Count}.");
+
+        Assert(
+            entries.All(entry =>
+                !string.IsNullOrWhiteSpace(entry.Id) &&
+                !string.IsNullOrWhiteSpace(entry.DisplayName)),
+            "Ein Katalogeintrag besitzt keine gültige Kennung " +
+            "oder keinen Anzeigenamen.");
+
+        Assert(
+            entries.Select(entry => entry.Id)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() == entries.Count,
+            "Der Katalog enthält doppelte Kennungen.");
+
+        Assert(
+            entries[0].Id == "ivmuri",
+            "Die bisherige Katalogreihenfolge wurde verändert.");
+
+        Assert(
+            entries[^1].Id == "spfbl-dnsbl",
+            "Der letzte Referenzeintrag wurde verändert.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bestehende Aufrufe mit zwei oder vier
+    /// Konstruktorparametern müssen weiterhin
+    /// funktionieren.
+    ///
+    /// Neue technische Eigenschaften besitzen
+    /// sichere Standardwerte.
+    /// </summary>
+    private static Task CheckLegacyCatalogConstructorAsync()
+    {
+        var definition = new BlacklistDefinition(
+            "legacy-test",
+            "Legacy Test");
+
+        Assert(
+            definition.TargetKind ==
+                BlacklistTargetKind.Unclassified,
+            "Der Standardwert von TargetKind ist falsch.");
+
+        Assert(
+            definition.AccessStatus ==
+                BlacklistAccessStatus.NotReviewed,
+            "Der Standardwert von AccessStatus ist falsch.");
+
+        Assert(
+            definition.QueryMethod ==
+                BlacklistQueryMethod.Unclassified,
+            "Der Standardwert von QueryMethod ist falsch.");
+
+        Assert(
+            definition.ReputationScope ==
+                BlacklistReputationScope.Unclassified,
+            "Der Standardwert von ReputationScope ist falsch.");
+
+        var existingDefinition = new BlacklistDefinition(
+            "legacy-ip",
+            "Legacy IP",
+            BlacklistTargetKind.IpAddress,
+            BlacklistAccessStatus.Permitted);
+
+        Assert(
+            existingDefinition.TargetKind ==
+                BlacklistTargetKind.IpAddress &&
+            existingDefinition.AccessStatus ==
+                BlacklistAccessStatus.Permitted,
+            "Der bisherige Vier-Parameter-Konstruktor " +
+            "ist nicht mehr kompatibel.");
+
+        Assert(
+            existingDefinition.QueryMethod ==
+                BlacklistQueryMethod.Unclassified &&
+            existingDefinition.ReputationScope ==
+                BlacklistReputationScope.Unclassified,
+            "Optionale Metadaten besitzen falsche Standardwerte.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Prüft die Metadaten aller sieben
+    /// bereits integrierten Listen.
+    ///
+    /// Diese Testmethode kontrolliert die
+    /// Kataloginformationen, nicht die
+    /// tatsächliche Job-Registrierung.
+    /// </summary>
+    private static Task CheckActiveCatalogMetadataAsync()
+    {
+        Assert(
+            ActiveBlacklistIds.Length == 7,
+            "Es werden genau sieben aktive Referenzen erwartet.");
+
+        Assert(
+            ActiveBlacklistIds
+                .Distinct(StringComparer.Ordinal)
+                .Count() == 7,
+            "Die aktiven Referenzen sind nicht eindeutig.");
+
+        foreach (var id in ActiveBlacklistIds)
+        {
+            var definition = GetDefinition(id);
+
+            Assert(
+                definition.TargetKind ==
+                    BlacklistTargetKind.IpAddress,
+                $"{id}: Falsches Prüfobjekt.");
+
+            Assert(
+                definition.QueryMethod ==
+                    BlacklistQueryMethod.Dns,
+                $"{id}: Falsches Abfrageverfahren.");
+
+            Assert(
+                definition.AccessStatus ==
+                    BlacklistAccessStatus.Permitted,
+                $"{id}: Unerwarteter Zugangsstatus.");
+
+            Assert(
+                definition.ReputationScope !=
+                    BlacklistReputationScope.Unclassified,
+                $"{id}: Bewertungsumfang fehlt.");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Domain-Prüfungen unterscheiden sich
+    /// ausdrücklich von URI-bezogenen Prüfungen.
+    ///
+    /// Der bestehende IPv4-Checker darf
+    /// nicht pauschal für diese Einträge
+    /// verwendet werden.
+    /// </summary>
+    private static Task CheckDomainAndUriMetadataAsync()
+    {
+        var fresh = GetDefinition("sem-fresh");
+        var semUri = GetDefinition("sem-uri");
+        var semUriRed = GetDefinition("sem-urired");
+        var spamhausDbl = GetDefinition("spamhaus-dbl");
+        var surbl = GetDefinition("surbl-multi");
+        var ivmUri = GetDefinition("ivmuri");
+
+        Assert(
+            fresh.TargetKind == BlacklistTargetKind.Domain &&
+            fresh.ReputationScope ==
+                BlacklistReputationScope.Domain,
+            "SEM FRESH wurde falsch klassifiziert.");
+
+        Assert(
+            semUri.TargetKind ==
+                BlacklistTargetKind.DomainFromUri &&
+            semUri.ReputationScope ==
+                BlacklistReputationScope.UriDomain,
+            "SEM URI wurde falsch klassifiziert.");
+
+        Assert(
+            semUriRed.TargetKind ==
+                BlacklistTargetKind.DomainFromUri &&
+            semUriRed.ReputationScope ==
+                BlacklistReputationScope.UriDomain,
+            "SEM URIRED wurde falsch klassifiziert.");
+
+        Assert(
+            spamhausDbl.TargetKind ==
+                BlacklistTargetKind.Domain &&
+            spamhausDbl.ReputationScope ==
+                BlacklistReputationScope.Domain,
+            "Spamhaus DBL darf nicht als IP-Prüfung " +
+            "klassifiziert werden.");
+
+        Assert(
+            surbl.TargetKind ==
+                BlacklistTargetKind.DomainFromUri &&
+            surbl.ReputationScope ==
+                BlacklistReputationScope.UriDomain,
+            "SURBL Multi wurde falsch klassifiziert.");
+
+        Assert(
+            ivmUri.TargetKind ==
+                BlacklistTargetKind.Uri &&
+            ivmUri.ReputationScope ==
+                BlacklistReputationScope.Mixed,
+            "ivmURI wurde falsch klassifiziert.");
+
+        foreach (var definition in new[]
+                 {
+                     fresh,
+                     semUri,
+                     semUriRed,
+                     spamhausDbl,
+                     surbl,
+                     ivmUri
+                 })
+        {
+            Assert(
+                definition.QueryMethod ==
+                    BlacklistQueryMethod.Dns,
+                $"{definition.Id}: DNS-Abfrageverfahren fehlt.");
+        }
+
+        Assert(
+            spamhausDbl.AccessStatus ==
+                BlacklistAccessStatus.RequiresProviderAuthorization &&
+            surbl.AccessStatus ==
+                BlacklistAccessStatus.RequiresProviderAuthorization &&
+            ivmUri.AccessStatus ==
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+            "Die Zugangsvoraussetzungen wurden verändert.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// UCEPROTECT verwendet bei allen drei
+    /// Levels eine IPv4-Adresse als Prüfobjekt.
+    ///
+    /// Die Bewertung betrifft jedoch
+    /// unterschiedliche Ebenen.
+    /// </summary>
+    private static Task CheckUceProtectScopesAsync()
+    {
+        var level1 = GetDefinition("uceprotectl1");
+        var level2 = GetDefinition("uceprotectl2");
+        var level3 = GetDefinition("uceprotectl3");
+
+        Assert(
+            level1.TargetKind == BlacklistTargetKind.IpAddress &&
+            level2.TargetKind == BlacklistTargetKind.IpAddress &&
+            level3.TargetKind == BlacklistTargetKind.IpAddress,
+            "Alle drei Level müssen IPv4-Prüfobjekte verwenden.");
+
+        Assert(
+            level1.ReputationScope ==
+                BlacklistReputationScope.SingleIp,
+            "Level 1 muss die Einzel-IP bewerten.");
+
+        Assert(
+            level2.ReputationScope ==
+                BlacklistReputationScope.IpNetwork,
+            "Level 2 muss als Netzbewertung " +
+            "klassifiziert werden.");
+
+        Assert(
+            level3.ReputationScope ==
+                BlacklistReputationScope.AutonomousSystem,
+            "Level 3 muss als ASN-Bewertung " +
+            "klassifiziert werden.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Eingestellte Quellen bleiben im Katalog.
+    ///
+    /// Sie dürfen jedoch ohne einen tatsächlichen
+    /// Prüfmechanismus nicht als erfolgreich
+    /// integriert dargestellt werden.
+    /// </summary>
+    private static Task CheckDiscontinuedSourcesAsync()
+    {
+        var badConf = GetDefinition(
+            "sorbs-rhsbl-badconf");
+
+        var noMail = GetDefinition(
+            "sorbs-rhsbl-nomail");
+
+        foreach (var definition in new[]
+                 {
+                     badConf,
+                     noMail
+                 })
+        {
+            Assert(
+                definition.AccessStatus ==
+                    BlacklistAccessStatus.Discontinued,
+                $"{definition.Id}: Einstellungsstatus fehlt.");
+
+            Assert(
+                definition.TargetKind ==
+                    BlacklistTargetKind.Domain,
+                $"{definition.Id}: Historisches Prüfobjekt falsch.");
+
+            Assert(
+                definition.QueryMethod ==
+                    BlacklistQueryMethod.Dns,
+                $"{definition.Id}: Historisches Verfahren falsch.");
+        }
+
+        var emptyResults =
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal);
+
+        var overview = BlacklistOverviewFactory.Create(
+            emptyResults);
+
+        var sorbsEntries = overview.Entries
+            .Where(entry =>
+                entry.Id is
+                    "sorbs-rhsbl-badconf"
+                    or "sorbs-rhsbl-nomail")
+            .ToArray();
+
+        Assert(
+            sorbsEntries.Length == 2,
+            "Die historischen SORBS-Einträge fehlen.");
+
+        Assert(
+            sorbsEntries.All(entry =>
+                entry.Status == "NotIntegrated" &&
+                !entry.IsConclusive &&
+                entry.IsListed is null),
+            "Eingestellte Quellen wurden ohne Prüfergebnis " +
+            "als erfolgreich bewertet.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Simuliert sieben technisch erfolgreiche
+    /// negative Blacklist-Prüfungen.
+    ///
+    /// Der Test führt keine DNS-Abfragen durch.
+    ///
+    /// Er kontrolliert ausschließlich die
+    /// Darstellung und Aggregation der Ergebnisse
+    /// über den bestehenden Referenzkatalog.
+    /// </summary>
+    private static Task CheckCatalogOverviewAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var results =
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal);
+
+        foreach (var id in ActiveBlacklistIds)
+        {
+            results.Add(
+                id,
+                new BlacklistCheckResult
+                {
+                    BlacklistId = id,
+                    CheckedTarget = TestIp,
+                    Status = BlacklistCheckStatus.NotListed,
+                    StartedAtUtc = now,
+                    CompletedAtUtc = now,
+                    ProviderResponse = "NXDOMAIN"
+                });
+        }
+
+        var overview = BlacklistOverviewFactory.Create(
+            results);
+
+        Assert(
+            overview.TotalCount == 68,
+            "Die Übersicht enthält nicht 68 Referenzeinträge.");
+
+        Assert(
+            overview.IntegratedCount == 7,
+            "Die sieben simulierten Ergebnisse " +
+            "wurden nicht korrekt integriert.");
+
+        Assert(
+            overview.NotIntegratedCount == 61,
+            "Die übrigen 61 Quellen wurden " +
+            "nicht korrekt als offen gekennzeichnet.");
+
+        Assert(
+            overview.NotListedCount == 7,
+            "Die sieben negativen Ergebnisse " +
+            "wurden falsch gezählt.");
+
+        Assert(
+            overview.ListedCount == 0,
+            "Es wurde eine nicht vorhandene " +
+            "Listung gezählt.");
+
+        Assert(
+            overview.WarningCount == 0,
+            "Es wurde eine nicht vorhandene " +
+            "Warnung gezählt.");
+
+        foreach (var id in ActiveBlacklistIds)
+        {
+            var entry = overview.Entries.Single(
+                item => item.Id == id);
+
+            Assert(
+                entry.Status == "NotListed" &&
+                entry.IsConclusive &&
+                entry.IsListed == false,
+                $"{id}: Simulierter Negativbefund falsch.");
+
+            Assert(
+                entry.CheckedTarget == TestIp,
+                $"{id}: Prüfobjekt wurde nicht übernommen.");
+
+            Assert(
+                entry.ProviderResponse == "NXDOMAIN",
+                $"{id}: Anbieterantwort wurde nicht übernommen.");
+
+            Assert(
+                entry.TargetKind ==
+                    BlacklistTargetKind.IpAddress.ToString(),
+                $"{id}: Alte API-Metadaten sind nicht kompatibel.");
+        }
+
+        var spamhausEntry = overview.Entries.Single(
+            item => item.Id == "spamhaus-dbl");
+
+        Assert(
+            spamhausEntry.Status == "NotIntegrated" &&
+            !spamhausEntry.IsConclusive &&
+            spamhausEntry.IsListed is null,
+            "Eine nicht integrierte Domain-Blacklist " +
+            "wurde fälschlich als geprüft ausgewiesen.");
+
+        return Task.CompletedTask;
+    }
+
+    // ===================================================
     // Gemeinsame Hilfsfunktionen
     // ===================================================
+
+    private static BlacklistDefinition GetDefinition(
+        string id)
+    {
+        return BlacklistCatalog.Entries.Single(
+            entry => entry.Id == id);
+    }
 
     private static string ModeName(ProfileTestMode mode)
     {
@@ -1118,13 +1618,6 @@ internal static class Program
 
     // ===================================================
     // Nullable-sichere Assertion
-    //
-    // Die Annotation informiert den Compiler,
-    // dass bei einer falschen Bedingung
-    // eine Ausnahme ausgelöst wird.
-    //
-    // Dadurch wird CS8602 bei der späteren
-    // Verwendung geprüfter Profile vermieden.
     // ===================================================
 
     private static void Assert(

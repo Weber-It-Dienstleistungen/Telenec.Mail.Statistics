@@ -179,15 +179,8 @@ public static class BlacklistCatalog
             // ==========================================
 
             // invaluement ivmURI:
-            //
-            // Prüft insbesondere Domains und
-            // einzelne IP-Adressen aus Links.
-            //
-            // DNSBL-basierter Anbieterzugang
-            // mit gesonderter Freigabe.
-            //
-            // Die konkrete URL-Normalisierung
-            // wird später implementiert.
+            // URI-bezogene DNS-Reputation mit
+            // anbieterspezifischer Normalisierung.
 
             new(
                 "ivmuri",
@@ -198,8 +191,7 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.Mixed),
 
             // SEM FRESH:
-            // Reputation kürzlich registrierter
-            // Domains, nicht der Versand-IP.
+            // Reputation kürzlich registrierter Domains.
 
             new(
                 "sem-fresh",
@@ -209,9 +201,9 @@ public static class BlacklistCatalog
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.Domain),
 
-            // SEM URI:
-            // Aus Nachrichten-URLs extrahierte
-            // Domains beziehungsweise Hostnamen.
+            // SEM URI und URIRED:
+            // Domains beziehungsweise Hostnamen,
+            // die aus Nachrichten-URLs stammen.
 
             new(
                 "sem-uri",
@@ -220,9 +212,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.NotReviewed,
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.UriDomain),
-
-            // SEM URIRED:
-            // Erweiterte URI-Reputationsliste.
 
             new(
                 "sem-urired",
@@ -236,14 +225,10 @@ public static class BlacklistCatalog
             // Historische SORBS-Listen
             // ==========================================
 
-            // SORBS wurde im Juni 2024 eingestellt.
-            //
-            // Die historischen Prüfverfahren
-            // waren domainbasierte DNS-Abfragen.
-            //
-            // Diese Einträge bleiben erhalten,
-            // dürfen jedoch keine fiktiven
-            // negativen Ergebnisse liefern.
+            // Der Dienst wurde 2024 eingestellt.
+            // Beide Referenzen bleiben erhalten,
+            // dürfen aber keinen fiktiven
+            // Negativbefund liefern.
 
             new(
                 "sorbs-rhsbl-badconf",
@@ -265,14 +250,6 @@ public static class BlacklistCatalog
             // Spamhaus und SURBL
             // ==========================================
 
-            // Spamhaus DBL:
-            // Ausschließlich Domain-Reputation.
-            // IPv4-Adressen dürfen nicht als
-            // Domain-Lookups abgefragt werden.
-            //
-            // Kommerzieller Zugriff über
-            // geeigneten Spamhaus-Zugang.
-
             new(
                 "spamhaus-dbl",
                 "Spamhaus DBL",
@@ -280,14 +257,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.RequiresProviderAuthorization,
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.Domain),
-
-            // SURBL Multi:
-            // URI-bezogene Domain-Reputation.
-            // Die Antwort enthält codierte
-            // Informationen zu Teillisten.
-            //
-            // Für die spätere Implementierung
-            // sind die Rückgabebits auszuwerten.
 
             new(
                 "surbl-multi",
@@ -298,14 +267,8 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.UriDomain),
 
             // ==========================================
-            // Bereits integrierte 0spam-Listen
+            // 0spam – bereits integriert
             // ==========================================
-
-            // 0spam:
-            // IPv4-basierte DNS-Abfrage.
-            // Antwortcodes können zwischen
-            // Einzel-IP- und Netzbewertungen
-            // unterscheiden.
 
             new(
                 "0spam",
@@ -326,13 +289,6 @@ public static class BlacklistCatalog
             // ==========================================
             // Abusix
             // ==========================================
-
-            // Abusix unterscheidet IP-basierte
-            // und domainbasierte Datensätze.
-            //
-            // Die konkrete Zugangsberechtigung
-            // bleibt vor einer Aktivierung
-            // gesondert zu klären.
 
             new(
                 "abusix-mail-intelligence-blacklist",
@@ -359,24 +315,63 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Noch nicht verifizierte Anbieter
+            // Noch nicht klassifizierte Quelle
             // ==========================================
 
             new("anonmails-dnsbl", "Anonmails DNSBL"),
 
-            new("backscatterer", "BACKSCATTERER"),
+            // ==========================================
+            // BACKSCATTERER – Sprint 30.2
+            // ==========================================
 
-            new("barracuda", "BARRACUDA"),
+            // DNSBL-Zone: ips.backscatterer.org
+            //
+            // Prüft IPv4-Adressen auf Backscatter,
+            // beispielsweise fehlgeleitete
+            // Unzustellbarkeitsmeldungen.
+            //
+            // Keine allgemeine Spamversenderliste.
+            //
+            // Für unsere reine Monitoring-Anwendung
+            // muss die Nutzungsfreigabe noch
+            // abschließend bewertet werden.
+
+            new(
+                "backscatterer",
+                "BACKSCATTERER",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // BARRACUDA – Sprint 30.2
+            // ==========================================
+
+            // DNSBL-Zone: b.barracudacentral.org
+            //
+            // IP-Reputation für Mailversand.
+            //
+            // Vor einer produktiven Verwendung
+            // muss die erforderliche Registrierung
+            // beziehungsweise Zugangsberechtigung
+            // des DNS-Resolvers geklärt werden.
+
+            new(
+                "barracuda",
+                "BARRACUDA",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // blocklist.de – bereits integriert
             // ==========================================
 
-            // IPv4-Reputation mit verschiedenen
-            // Angriffsarten als Listungsgrund.
-            //
-            // Ein Treffer bedeutet nicht zwingend,
-            // dass Spam verschickt wurde.
+            // Verschiedene Angriffskategorien.
+            // Ein Treffer ist kein automatischer
+            // Beweis für Spamversand.
 
             new(
                 "blocklist-de",
@@ -392,26 +387,87 @@ public static class BlacklistCatalog
 
             new("calivent", "CALIVENT"),
 
-            new("cymru-bogons", "CYMRU BOGONS"),
+            // ==========================================
+            // CYMRU BOGONS – Sprint 30.2
+            // ==========================================
 
-            new("dan-tor", "DAN TOR"),
+            // DNS-Zone: bogons.cymru.com
+            //
+            // IPv4-Adresse als Abfrageobjekt.
+            //
+            // Die Listung bezieht sich auf
+            // reservierte oder nicht regulär
+            // zugewiesene IPv4-Adressbereiche.
+            //
+            // Sie ist keine Spam-Reputation.
+            //
+            // Team Cymru dokumentiert zusätzlich
+            // Fullbogon- und IPv6-Datenquellen.
+            // Diese sind nicht automatisch Teil
+            // des hier referenzierten Eintrags.
 
-            new("dan-torexit", "DAN TOREXIT"),
+            new(
+                "cymru-bogons",
+                "CYMRU BOGONS",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.IpNetwork),
+
+            // ==========================================
+            // DAN TOR – Sprint 30.2
+            // ==========================================
+
+            // DNS-Zone: tor.dan.me.uk
+            //
+            // Erfasst Tor-Knoten allgemein.
+            // Ein Treffer ist nicht gleichbedeutend
+            // mit Spam oder einer kompromittierten IP.
+            //
+            // Der Betreiber dokumentiert auch
+            // IPv6-Abfragen über Nibble-Reversal.
+            //
+            // Unser aktueller Prüfgegenstand
+            // bleibt zunächst die IPv4-Adresse.
+
+            new(
+                "dan-tor",
+                "DAN TOR",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // DAN TOREXIT – Sprint 30.2
+            // ==========================================
+
+            // DNS-Zone: torexit.dan.me.uk
+            //
+            // Erfasst ausschließlich Tor-Exit-Knoten.
+            //
+            // Ein Exit-Knoten ist nicht automatisch
+            // als Spamversender einzustufen.
+
+            new(
+                "dan-torexit",
+                "DAN TOREXIT",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             new("drmx", "DRMX"),
 
             // ==========================================
-            // DroneBL
+            // DroneBL – technisch vorbereitet
             // ==========================================
 
-            // IPv4-DNSBL.
+            // Der lokale Windows-Resolver konnte
+            // die positive Kontrolladresse bisher
+            // nicht zuverlässig auflösen.
             //
-            // Die lokale DNS-Auflösung
-            // muss vor der Aktivierung
-            // erneut geprüft werden.
-            //
-            // Das Profil ist bereits angelegt,
-            // aber nicht im Monitoring aktiv.
+            // Deshalb weiterhin nicht aktiv.
 
             new(
                 "drone-bl",
@@ -447,9 +503,6 @@ public static class BlacklistCatalog
             // invaluement IP-Listen
             // ==========================================
 
-            // ivmSIP:
-            // Einzelne IPv4-Adressen.
-
             new(
                 "ivmsip",
                 "ivmSIP",
@@ -457,10 +510,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.RequiresProviderAuthorization,
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.SingleIp),
-
-            // ivmSIP24:
-            // Netzbezogene IP-Reputation
-            // auf /24-Basis.
 
             new(
                 "ivmsip24",
@@ -509,14 +558,60 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere Rechercheeinträge
+            // SpamRATS – Sprint 30.2
             // ==========================================
 
-            new("rats-dyna", "RATS Dyna"),
+            // Die folgenden drei Listen verwenden
+            // IP-basierte DNSBL-Abfragen.
+            //
+            // Anbieter-DNS-Zonen:
+            //
+            // [API_KEY].dyna.spamrats.com
+            // [API_KEY].noptr.spamrats.com
+            // [API_KEY].spam.spamrats.com
+            //
+            // Eine geeignete Registrierung und
+            // ein API-Key sind erforderlich.
+            //
+            // Der tatsächliche Schlüssel darf
+            // nicht in den Quellcode gelangen.
+            //
+            // Dokumentierte Rückgabecodes:
+            //
+            // RATS Dyna:  127.0.0.36
+            // RATS NoPtr: 127.0.0.37
+            // RATS Spam:  127.0.0.38
+            //
+            // Weitere Antworten dürfen nicht
+            // automatisch als Listung gelten.
 
-            new("rats-noptr", "RATS NoPtr"),
+            new(
+                "rats-dyna",
+                "RATS Dyna",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
-            new("rats-spam", "RATS Spam"),
+            new(
+                "rats-noptr",
+                "RATS NoPtr",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "rats-spam",
+                "RATS Spam",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // Weitere Rechercheeinträge
+            // ==========================================
 
             new("rbl-jp", "RBL JP"),
 
@@ -528,10 +623,6 @@ public static class BlacklistCatalog
             // Spam Eating Monkey – IP-Listen
             // ==========================================
 
-            // SEM BACKSCATTER:
-            // IPv4-Adressen mit Backscatter-
-            // Aktivitäten gegenüber Spamtraps.
-
             new(
                 "sem-backscatter",
                 "SEM BACKSCATTER",
@@ -539,10 +630,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.NotReviewed,
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.SingleIp),
-
-            // SEM BLACK:
-            // IPv4-Adressen aus Spamtrap-
-            // oder Policy-Erkenntnissen.
 
             new(
                 "sem-black",
@@ -566,14 +653,9 @@ public static class BlacklistCatalog
             // SpamCop
             // ==========================================
 
-            // IPv4-basierte DNSBL.
-            //
-            // Technisches Anbieterprofil
-            // wurde bereits geprüft.
-            //
-            // Freigabe für das konkrete
-            // kommerzielle Monitoring
-            // noch nicht abgeschlossen.
+            // Das technische Profil ist vorbereitet.
+            // Die Nutzung für unser kommerzielles
+            // Monitoring bleibt noch zu klären.
 
             new(
                 "spamcop",
@@ -587,15 +669,9 @@ public static class BlacklistCatalog
             // Spamhaus ZEN
             // ==========================================
 
-            // IP-basierte DNS-Reputation.
-            //
-            // Bei kommerziellem Zugriff
-            // wird ein geeigneter DQS- oder
-            // vergleichbarer Vertrag benötigt.
-            //
-            // Die Rückgabecodes müssen
-            // anbieterspezifisch interpretiert
-            // werden.
+            // Anbieterzugang erforderlich.
+            // Antwortcodes müssen explizit
+            // interpretiert werden.
 
             new(
                 "spamhaus-zen",
@@ -620,11 +696,12 @@ public static class BlacklistCatalog
             new("truncate", "TRUNCATE"),
 
             // ==========================================
-            // UCEPROTECT – alle Level integriert
+            // UCEPROTECT – bereits integriert
             // ==========================================
 
-            // Level 1:
-            // Einzelne IPv4-Adresse.
+            // Level 1: Einzel-IP
+            // Level 2: IPv4-Netzbereich
+            // Level 3: Autonomes System
 
             new(
                 "uceprotectl1",
@@ -634,9 +711,6 @@ public static class BlacklistCatalog
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.SingleIp),
 
-            // Level 2:
-            // Größerer IPv4-Netzbereich.
-
             new(
                 "uceprotectl2",
                 "UCEPROTECTL2",
@@ -644,12 +718,6 @@ public static class BlacklistCatalog
                 BlacklistAccessStatus.Permitted,
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.IpNetwork),
-
-            // Level 3:
-            // Reputation des zugehörigen ASN.
-            //
-            // Die Abfrage verwendet weiterhin
-            // die IPv4-Adresse als Eingabe.
 
             new(
                 "uceprotectl3",
@@ -672,8 +740,8 @@ public static class BlacklistCatalog
             // Beim ursprünglichen MXToolbox-Test
             // wurde ein Timeout beobachtet.
             //
-            // Eine eigene technische
-            // Klassifizierung steht noch aus.
+            // Technische Klassifizierung
+            // steht weiterhin aus.
 
             new("spfbl-dnsbl", "SPFBL DNSBL")
         });

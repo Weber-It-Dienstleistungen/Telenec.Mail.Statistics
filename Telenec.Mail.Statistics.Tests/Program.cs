@@ -42,6 +42,143 @@ internal static class Program
         "uceprotectl3"
     };
 
+    /*
+     * Verbindlicher Referenzbestand.
+     *
+     * Diese Liste wird bewusst unabhängig
+     * vom BlacklistCatalog geführt.
+     *
+     * Damit erkennen wir auch versehentlich
+     * entfernte, ausgetauschte oder umsortierte
+     * Kennungen.
+     */
+    private static readonly string[] ExpectedReferenceIds =
+    {
+        "ivmuri",
+        "sem-fresh",
+        "sem-uri",
+        "sem-urired",
+        "sorbs-rhsbl-badconf",
+        "sorbs-rhsbl-nomail",
+        "spamhaus-dbl",
+        "surbl-multi",
+        "0spam",
+        "0spam-rbl",
+        "abusix-mail-intelligence-blacklist",
+        "abusix-mail-intelligence-domain-blacklist",
+        "abusix-mail-intelligence-exploit-list",
+        "anonmails-dnsbl",
+        "backscatterer",
+        "barracuda",
+        "blocklist-de",
+        "calivent",
+        "cymru-bogons",
+        "dan-tor",
+        "dan-torexit",
+        "drmx",
+        "drone-bl",
+        "fabelsources",
+        "hil",
+        "hil2",
+        "hostkarma-black",
+        "ibm-dns-blacklist",
+        "icmforbidden",
+        "imp-spam",
+        "imp-worm",
+        "interserver",
+        "ivmsip",
+        "ivmsip24",
+        "jippg",
+        "kemptbl",
+        "konstant",
+        "lashback",
+        "mailspike-bl",
+        "mailspike-z",
+        "msrbl-phishing",
+        "msrbl-spam",
+        "netherrelays",
+        "netherunsure",
+        "nosolicitado",
+        "psbl",
+        "rats-dyna",
+        "rats-noptr",
+        "rats-spam",
+        "rbl-jp",
+        "s5h-net",
+        "schulte",
+        "sem-backscatter",
+        "sem-black",
+        "sender-score-reputation-network",
+        "servicesnet",
+        "spamcop",
+        "spamhaus-zen",
+        "suomispam-reputation",
+        "swinog",
+        "triumf",
+        "truncate",
+        "uceprotectl1",
+        "uceprotectl2",
+        "uceprotectl3",
+        "woodys-smtp-blacklist",
+        "zapbl",
+        "spfbl-dnsbl"
+    };
+
+    /*
+     * Sprint 30.2:
+     *
+     * Acht neu klassifizierte Referenzeinträge.
+     *
+     * Alle verwenden IPv4 als Prüfobjekt
+     * und DNS als technisches Verfahren.
+     *
+     * Die Zugangs- und Reputationsinformationen
+     * werden pro Anbieter einzeln abgesichert.
+     */
+    private static readonly CatalogMetadataExpectation[]
+        Sprint302Expectations =
+        {
+            new(
+                "backscatterer",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "barracuda",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "cymru-bogons",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.IpNetwork),
+
+            new(
+                "dan-tor",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "dan-torexit",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "rats-dyna",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "rats-noptr",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "rats-spam",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp)
+        };
+
     private static async Task<int> Main()
     {
         var passed = 0;
@@ -278,11 +415,6 @@ internal static class Program
             "blocklist.de: höherer Listungscode",
             CheckBlocklistDeCodeAsync);
 
-        // ================================================
-        // Sprint 30:
-        // Neue Regressionstests für den Referenzkatalog.
-        // ================================================
-
         Console.WriteLine();
         Console.WriteLine(
             "Blacklist-Katalog – Sprint 30");
@@ -315,6 +447,31 @@ internal static class Program
         await Test(
             "Übersicht mit sieben simulierten Ergebnissen",
             CheckCatalogOverviewAsync);
+
+        // ================================================
+        // Sprint 30.2:
+        // Zusätzliche Katalog-Regressionstests.
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30.2");
+        Console.WriteLine();
+
+        await Test(
+            "Exakte 68 Referenzkennungen und Reihenfolge",
+            CheckCompleteReferenceSetAsync);
+
+        foreach (var expectation in Sprint302Expectations)
+        {
+            await Test(
+                $"Anbieter-Metadaten: {expectation.Id}",
+                () => CheckSprint302MetadataAsync(expectation));
+        }
+
+        await Test(
+            "Neue Katalogeinträge werden nicht automatisch aktiv",
+            CheckSprint302InactiveAsync);
 
         Console.WriteLine();
         Console.WriteLine(
@@ -1053,16 +1210,9 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30 – Katalog-Regressionstests
+    // Sprint 30.1 – Katalog-Regressionstests
     // ===================================================
 
-    /// <summary>
-    /// Sichert die vollständige Referenzmenge.
-    ///
-    /// Einträge dürfen bei der Weiterentwicklung
-    /// weder verloren gehen noch mehrfach
-    /// registriert werden.
-    /// </summary>
     private static Task CheckCatalogStructureAsync()
     {
         var entries = BlacklistCatalog.Entries;
@@ -1095,14 +1245,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Bestehende Aufrufe mit zwei oder vier
-    /// Konstruktorparametern müssen weiterhin
-    /// funktionieren.
-    ///
-    /// Neue technische Eigenschaften besitzen
-    /// sichere Standardwerte.
-    /// </summary>
     private static Task CheckLegacyCatalogConstructorAsync()
     {
         var definition = new BlacklistDefinition(
@@ -1153,14 +1295,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Prüft die Metadaten aller sieben
-    /// bereits integrierten Listen.
-    ///
-    /// Diese Testmethode kontrolliert die
-    /// Kataloginformationen, nicht die
-    /// tatsächliche Job-Registrierung.
-    /// </summary>
     private static Task CheckActiveCatalogMetadataAsync()
     {
         Assert(
@@ -1201,14 +1335,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Domain-Prüfungen unterscheiden sich
-    /// ausdrücklich von URI-bezogenen Prüfungen.
-    ///
-    /// Der bestehende IPv4-Checker darf
-    /// nicht pauschal für diese Einträge
-    /// verwendet werden.
-    /// </summary>
     private static Task CheckDomainAndUriMetadataAsync()
     {
         var fresh = GetDefinition("sem-fresh");
@@ -1288,13 +1414,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// UCEPROTECT verwendet bei allen drei
-    /// Levels eine IPv4-Adresse als Prüfobjekt.
-    ///
-    /// Die Bewertung betrifft jedoch
-    /// unterschiedliche Ebenen.
-    /// </summary>
     private static Task CheckUceProtectScopesAsync()
     {
         var level1 = GetDefinition("uceprotectl1");
@@ -1327,13 +1446,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Eingestellte Quellen bleiben im Katalog.
-    ///
-    /// Sie dürfen jedoch ohne einen tatsächlichen
-    /// Prüfmechanismus nicht als erfolgreich
-    /// integriert dargestellt werden.
-    /// </summary>
     private static Task CheckDiscontinuedSourcesAsync()
     {
         var badConf = GetDefinition(
@@ -1393,16 +1505,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Simuliert sieben technisch erfolgreiche
-    /// negative Blacklist-Prüfungen.
-    ///
-    /// Der Test führt keine DNS-Abfragen durch.
-    ///
-    /// Er kontrolliert ausschließlich die
-    /// Darstellung und Aggregation der Ergebnisse
-    /// über den bestehenden Referenzkatalog.
-    /// </summary>
     private static Task CheckCatalogOverviewAsync()
     {
         var now = DateTimeOffset.UtcNow;
@@ -1492,6 +1594,156 @@ internal static class Program
             spamhausEntry.IsListed is null,
             "Eine nicht integrierte Domain-Blacklist " +
             "wurde fälschlich als geprüft ausgewiesen.");
+
+        return Task.CompletedTask;
+    }
+
+    // ===================================================
+    // Sprint 30.2 – Neue Katalog-Regressionstests
+    // ===================================================
+
+    /// <summary>
+    /// Sichert den exakten Inhalt und die
+    /// Reihenfolge des Referenzkatalogs.
+    ///
+    /// Der Referenzbestand ist unabhängig
+    /// vom produktiven Katalog definiert.
+    /// </summary>
+    private static Task CheckCompleteReferenceSetAsync()
+    {
+        Assert(
+            ExpectedReferenceIds.Length == 68,
+            "Die feste Referenzliste muss 68 Einträge besitzen.");
+
+        var currentIds = BlacklistCatalog.Entries
+            .Select(entry => entry.Id)
+            .ToArray();
+
+        Assert(
+            currentIds.Length == ExpectedReferenceIds.Length,
+            "Katalog und Referenzliste haben " +
+            "unterschiedliche Eintragszahlen.");
+
+        Assert(
+            currentIds.SequenceEqual(
+                ExpectedReferenceIds,
+                StringComparer.Ordinal),
+            "Die exakten 68 Referenzkennungen " +
+            "oder ihre Reihenfolge wurden verändert.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Kontrolliert genau eine Klassifizierung
+    /// aus Sprint 30.2.
+    ///
+    /// Jeder Anbieter wird als separater
+    /// Regressionstest ausgeführt.
+    /// </summary>
+    private static Task CheckSprint302MetadataAsync(
+        CatalogMetadataExpectation expectation)
+    {
+        var definition = GetDefinition(expectation.Id);
+
+        Assert(
+            definition.TargetKind ==
+                BlacklistTargetKind.IpAddress,
+            $"{expectation.Id}: Erwartet wird " +
+            "ein IPv4-Prüfobjekt.");
+
+        Assert(
+            definition.QueryMethod ==
+                BlacklistQueryMethod.Dns,
+            $"{expectation.Id}: Erwartet wird " +
+            "eine DNS-basierte Abfrage.");
+
+        Assert(
+            definition.AccessStatus ==
+                expectation.AccessStatus,
+            $"{expectation.Id}: Der Zugangsstatus " +
+            "entspricht nicht der Klassifizierung.");
+
+        Assert(
+            definition.ReputationScope ==
+                expectation.ReputationScope,
+            $"{expectation.Id}: Der Bewertungsumfang " +
+            "entspricht nicht der Klassifizierung.");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Die acht neuen Quellen besitzen
+    /// bisher nur Katalog-Metadaten.
+    ///
+    /// Mit sieben simulierten Bestandsprüfungen
+    /// müssen sie in der Übersicht weiterhin
+    /// als NotIntegrated erscheinen.
+    ///
+    /// Dieser Test prüft die OverviewFactory,
+    /// nicht die tatsächliche Registrierung
+    /// im Monitoring-Dienst.
+    /// </summary>
+    private static Task CheckSprint302InactiveAsync()
+    {
+        var currentResults =
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal);
+
+        foreach (var id in ActiveBlacklistIds)
+        {
+            currentResults.Add(
+                id,
+                Result(
+                    id,
+                    TestIp,
+                    BlacklistCheckStatus.NotListed));
+        }
+
+        var overview = BlacklistOverviewFactory.Create(
+            currentResults);
+
+        Assert(
+            overview.IntegratedCount == 7,
+            "Die simulierte Übersicht muss " +
+            "sieben integrierte Listen enthalten.");
+
+        Assert(
+            overview.NotIntegratedCount == 61,
+            "Die simulierte Übersicht muss " +
+            "61 nicht integrierte Listen enthalten.");
+
+        foreach (var expectation in Sprint302Expectations)
+        {
+            Assert(
+                !ActiveBlacklistIds.Contains(
+                    expectation.Id,
+                    StringComparer.Ordinal),
+                $"{expectation.Id}: Ein neues Anbieterprofil " +
+                "wurde versehentlich in die aktive " +
+                "Referenzliste aufgenommen.");
+
+            var entry = overview.Entries.Single(
+                item => item.Id == expectation.Id);
+
+            Assert(
+                entry.Status == "NotIntegrated",
+                $"{expectation.Id}: Anbieter darf ohne " +
+                "Prüfergebnis nicht als integriert gelten.");
+
+            Assert(
+                !entry.IsConclusive &&
+                entry.IsListed is null,
+                $"{expectation.Id}: Es darf kein " +
+                "fiktives Prüfergebnis erscheinen.");
+
+            Assert(
+                entry.AccessStatus ==
+                    expectation.AccessStatus.ToString(),
+                $"{expectation.Id}: Der Zugangsstatus " +
+                "wird in der Übersicht falsch ausgegeben.");
+        }
 
         return Task.CompletedTask;
     }
@@ -1643,6 +1895,11 @@ internal static class Program
         string Id,
         string Zone,
         string PositiveCode);
+
+    private sealed record CatalogMetadataExpectation(
+        string Id,
+        BlacklistAccessStatus AccessStatus,
+        BlacklistReputationScope ReputationScope);
 
     private enum ProfileTestMode
     {

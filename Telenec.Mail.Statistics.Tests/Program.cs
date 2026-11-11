@@ -43,14 +43,10 @@ internal static class Program
     };
 
     /*
-     * Verbindlicher Referenzbestand.
+     * Unabhängiger Referenzbestand.
      *
-     * Diese Liste wird bewusst unabhängig
-     * vom BlacklistCatalog geführt.
-     *
-     * Damit erkennen wir auch versehentlich
-     * entfernte, ausgetauschte oder umsortierte
-     * Kennungen.
+     * Die exakten 68 Kennungen und ihre
+     * Reihenfolge werden abgesichert.
      */
     private static readonly string[] ExpectedReferenceIds =
     {
@@ -126,14 +122,7 @@ internal static class Program
 
     /*
      * Sprint 30.2:
-     *
-     * Acht neu klassifizierte Referenzeinträge.
-     *
-     * Alle verwenden IPv4 als Prüfobjekt
-     * und DNS als technisches Verfahren.
-     *
-     * Die Zugangs- und Reputationsinformationen
-     * werden pro Anbieter einzeln abgesichert.
+     * Acht klassifizierte IPv4-DNSBL-Anbieter.
      */
     private static readonly CatalogMetadataExpectation[]
         Sprint302Expectations =
@@ -177,6 +166,57 @@ internal static class Program
                 "rats-spam",
                 BlacklistAccessStatus.RequiresProviderAuthorization,
                 BlacklistReputationScope.SingleIp)
+        };
+
+    /*
+     * Sprint 30.3:
+     *
+     * Sieben weitere IPv4-DNSBL-Anbieter.
+     *
+     * Zugang bleibt NotReviewed.
+     * Die Katalogklassifizierung allein
+     * bedeutet keine Nutzungsfreigabe.
+     *
+     * Suomispam und SPFBL besitzen
+     * gemischte Bewertungsumfänge.
+     */
+    private static readonly CatalogMetadataExpectation[]
+        Sprint303Expectations =
+        {
+            new(
+                "anonmails-dnsbl",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "hostkarma-black",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "mailspike-bl",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "mailspike-z",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "s5h-net",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "suomispam-reputation",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.Mixed),
+
+            new(
+                "spfbl-dnsbl",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.Mixed)
         };
 
     private static async Task<int> Main()
@@ -448,11 +488,6 @@ internal static class Program
             "Übersicht mit sieben simulierten Ergebnissen",
             CheckCatalogOverviewAsync);
 
-        // ================================================
-        // Sprint 30.2:
-        // Zusätzliche Katalog-Regressionstests.
-        // ================================================
-
         Console.WriteLine();
         Console.WriteLine(
             "Blacklist-Katalog – Sprint 30.2");
@@ -466,12 +501,29 @@ internal static class Program
         {
             await Test(
                 $"Anbieter-Metadaten: {expectation.Id}",
-                () => CheckSprint302MetadataAsync(expectation));
+                () => CheckIpProviderMetadataAsync(expectation));
         }
 
         await Test(
             "Neue Katalogeinträge werden nicht automatisch aktiv",
             CheckSprint302InactiveAsync);
+
+        // ================================================
+        // Sprint 30.3:
+        // Sieben zusätzliche Katalogtests.
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30.3");
+        Console.WriteLine();
+
+        foreach (var expectation in Sprint303Expectations)
+        {
+            await Test(
+                $"Anbieter-Metadaten: {expectation.Id}",
+                () => CheckIpProviderMetadataAsync(expectation));
+        }
 
         Console.WriteLine();
         Console.WriteLine(
@@ -481,7 +533,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Bestehende DNSBL-Regressionstests
+    // DNSBL-Regressionstests
     // ===================================================
 
     private static async Task RunDnsScenarioAsync(
@@ -591,7 +643,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Bestehende Batch-Regressionstests
+    // Batch-Regressionstests
     // ===================================================
 
     private static async Task CheckMultipleProvidersAsync()
@@ -968,7 +1020,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Gemeinsame DNSBL-Profiltests
+    // DNSBL-Profiltests
     // ===================================================
 
     private static Task CheckDefinitionsAsync(
@@ -1210,7 +1262,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.1 – Katalog-Regressionstests
+    // Sprint 30.1 – Katalogtests
     // ===================================================
 
     private static Task CheckCatalogStructureAsync()
@@ -1599,16 +1651,9 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.2 – Neue Katalog-Regressionstests
+    // Sprint 30.2 – Katalogtests
     // ===================================================
 
-    /// <summary>
-    /// Sichert den exakten Inhalt und die
-    /// Reihenfolge des Referenzkatalogs.
-    ///
-    /// Der Referenzbestand ist unabhängig
-    /// vom produktiven Katalog definiert.
-    /// </summary>
     private static Task CheckCompleteReferenceSetAsync()
     {
         Assert(
@@ -1634,14 +1679,20 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    // ===================================================
+    // Sprint 30.2 und 30.3 – gemeinsame Metadatenprüfung
+    // ===================================================
+
     /// <summary>
-    /// Kontrolliert genau eine Klassifizierung
-    /// aus Sprint 30.2.
+    /// Prüft einen IPv4-DNSBL-Katalogeintrag.
     ///
-    /// Jeder Anbieter wird als separater
-    /// Regressionstest ausgeführt.
+    /// Diese Methode führt ausdrücklich
+    /// keine externe DNS-Abfrage aus.
+    ///
+    /// Bewertet werden nur die im Katalog
+    /// gespeicherten technischen Metadaten.
     /// </summary>
-    private static Task CheckSprint302MetadataAsync(
+    private static Task CheckIpProviderMetadataAsync(
         CatalogMetadataExpectation expectation)
     {
         var definition = GetDefinition(expectation.Id);
@@ -1674,16 +1725,13 @@ internal static class Program
     }
 
     /// <summary>
-    /// Die acht neuen Quellen besitzen
-    /// bisher nur Katalog-Metadaten.
+    /// Prüft, dass die acht Quellen aus
+    /// Sprint 30.2 in einer simulierten
+    /// Übersicht nicht als integriert gelten.
     ///
-    /// Mit sieben simulierten Bestandsprüfungen
-    /// müssen sie in der Übersicht weiterhin
-    /// als NotIntegrated erscheinen.
-    ///
-    /// Dieser Test prüft die OverviewFactory,
-    /// nicht die tatsächliche Registrierung
-    /// im Monitoring-Dienst.
+    /// Die tatsächliche Registrierung im
+    /// Monitoring-Dienst ist nicht Gegenstand
+    /// dieser Prüfung.
     /// </summary>
     private static Task CheckSprint302InactiveAsync()
     {
@@ -1867,10 +1915,6 @@ internal static class Program
             "Erwartete Ausnahme " +
             $"{typeof(TException).Name} fehlt.");
     }
-
-    // ===================================================
-    // Nullable-sichere Assertion
-    // ===================================================
 
     private static void Assert(
         [DoesNotReturnIf(false)] bool condition,

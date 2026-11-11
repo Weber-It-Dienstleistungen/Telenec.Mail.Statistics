@@ -43,10 +43,10 @@ internal static class Program
     };
 
     /*
-     * Unabhängiger Referenzbestand.
+     * Verbindlicher und unabhängiger Referenzbestand.
      *
-     * Die exakten 68 Kennungen und ihre
-     * Reihenfolge werden abgesichert.
+     * Alle 68 Kennungen werden einschließlich
+     * ihrer bisherigen Reihenfolge abgesichert.
      */
     private static readonly string[] ExpectedReferenceIds =
     {
@@ -120,10 +120,10 @@ internal static class Program
         "spfbl-dnsbl"
     };
 
-    /*
-     * Sprint 30.2:
-     * Acht klassifizierte IPv4-DNSBL-Anbieter.
-     */
+    // ================================================
+    // Sprint 30.2
+    // ================================================
+
     private static readonly CatalogMetadataExpectation[]
         Sprint302Expectations =
         {
@@ -168,10 +168,10 @@ internal static class Program
                 BlacklistReputationScope.SingleIp)
         };
 
-    /*
-     * Sprint 30.3:
-     * Sieben zusätzliche IPv4-DNSBL-Anbieter.
-     */
+    // ================================================
+    // Sprint 30.3
+    // ================================================
+
     private static readonly CatalogMetadataExpectation[]
         Sprint303Expectations =
         {
@@ -211,20 +211,10 @@ internal static class Program
                 BlacklistReputationScope.Mixed)
         };
 
-    /*
-     * Sprint 30.4:
-     * Sieben weitere Anbieter.
-     *
-     * IMP SPAM, IMP WORM, INTERSERVER,
-     * LASHBACK, MSRBL Phishing, MSRBL Spam
-     * und SWINOG.
-     *
-     * Die technische DNS-Klassifizierung
-     * ist noch keine Nutzungsfreigabe.
-     *
-     * Diese Daten werden ausschließlich
-     * auf Katalogebene getestet.
-     */
+    // ================================================
+    // Sprint 30.4
+    // ================================================
+
     private static readonly CatalogMetadataExpectation[]
         Sprint304Expectations =
         {
@@ -262,6 +252,60 @@ internal static class Program
                 "swinog",
                 BlacklistAccessStatus.NotReviewed,
                 BlacklistReputationScope.SingleIp)
+        };
+
+    // ================================================
+    // Sprint 30.5
+    // ================================================
+
+    /*
+     * Sechs weitere IPv4-DNSBL-Referenzen.
+     *
+     * CALIVENT, DrMX, TRUNCATE und Woody's
+     * bleiben hinsichtlich der Nutzungsfreigabe
+     * auf NotReviewed.
+     *
+     * Fabelsources und ZapBL sind als
+     * Permitted klassifiziert.
+     *
+     * Mixed berücksichtigt potenziell
+     * netzbezogene Listungseffekte.
+     *
+     * Diese Tests ersetzen keine Prüfung
+     * der tatsächlichen DNS-Erreichbarkeit.
+     */
+    private static readonly CatalogMetadataExpectation[]
+        Sprint305Expectations =
+        {
+            new(
+                "calivent",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "drmx",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "fabelsources",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.Mixed),
+
+            new(
+                "truncate",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "woodys-smtp-blacklist",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "zapbl",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.Mixed)
         };
 
     private static async Task<int> Main()
@@ -565,17 +609,28 @@ internal static class Program
                 () => CheckIpProviderMetadataAsync(expectation));
         }
 
-        // ================================================
-        // Sprint 30.4:
-        // Sieben zusätzliche Katalogtests.
-        // ================================================
-
         Console.WriteLine();
         Console.WriteLine(
             "Blacklist-Katalog – Sprint 30.4");
         Console.WriteLine();
 
         foreach (var expectation in Sprint304Expectations)
+        {
+            await Test(
+                $"Anbieter-Metadaten: {expectation.Id}",
+                () => CheckIpProviderMetadataAsync(expectation));
+        }
+
+        // ================================================
+        // Sprint 30.5
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30.5");
+        Console.WriteLine();
+
+        foreach (var expectation in Sprint305Expectations)
         {
             await Test(
                 $"Anbieter-Metadaten: {expectation.Id}",
@@ -1708,7 +1763,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.2 – Katalogtests
+    // Sprint 30.2 – Referenz-Regressionstest
     // ===================================================
 
     private static Task CheckCompleteReferenceSetAsync()
@@ -1737,15 +1792,16 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.2 bis 30.4:
-    // Gemeinsame Metadatenprüfung
+    // Sprint 30.2–30.5 – Metadatenprüfungen
     // ===================================================
 
     /// <summary>
-    /// Prüft einen IPv4-DNSBL-Katalogeintrag.
+    /// Gemeinsame Regression für IPv4-DNSBL-Einträge.
     ///
-    /// Führt ausdrücklich keine externe
-    /// DNS-Abfrage durch.
+    /// Die individuellen Erwartungswerte werden
+    /// für jeden Anbieter separat festgelegt.
+    ///
+    /// Kein Netzwerkzugriff.
     /// </summary>
     private static Task CheckIpProviderMetadataAsync(
         CatalogMetadataExpectation expectation)
@@ -1779,15 +1835,6 @@ internal static class Program
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Prüft, dass die acht Quellen aus
-    /// Sprint 30.2 in einer simulierten
-    /// Übersicht nicht als integriert gelten.
-    ///
-    /// Die tatsächliche Registrierung im
-    /// Monitoring-Dienst ist nicht Gegenstand
-    /// dieser Prüfung.
-    /// </summary>
     private static Task CheckSprint302InactiveAsync()
     {
         var currentResults =

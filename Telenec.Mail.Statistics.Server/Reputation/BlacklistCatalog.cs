@@ -436,12 +436,68 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.Mixed),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // Habeas Infringer List – Sprint 30.6
             // ==========================================
 
-            new("hil", "HIL"),
+            // Historische DNS-Zone:
+            // hil.habeas.com
+            //
+            // IP-basierte Habeas Infringer List.
+            //
+            // Historisch zur Erkennung von
+            // Mailservern verwendet, die gegen
+            // die Habeas-Richtlinien verstießen.
+            //
+            // Die Quelle wird als zugangs-
+            // beschränkte DNSBL geführt.
+            //
+            // Die aktuelle Berechtigung und
+            // die DNS-Erreichbarkeit müssen
+            // vor jeder Aktivierung geprüft werden.
+            //
+            // HIL und HIL2 bleiben eigenständige
+            // historische Referenzkennungen.
 
-            new("hil2", "HIL2"),
+            new(
+                "hil",
+                "HIL",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // Habeas HIL2 – Sprint 30.6
+            // ==========================================
+
+            // Historische IPv4-Reputationsquelle
+            // aus dem Habeas-Umfeld.
+            //
+            // MXToolbox dokumentiert HIL2
+            // separat von HIL.
+            //
+            // Die konkrete historische DNS-Zone
+            // konnte nicht unabhängig und
+            // zuverlässig bestätigt werden.
+            //
+            // Die DNS-Einordnung beruht auf
+            // der historischen DNSBL-Verwendung.
+            //
+            // Eine technische Gleichsetzung
+            // mit hil.habeas.com wäre unzulässig.
+            //
+            // Zugangsrecht und Erreichbarkeit
+            // bleiben ausdrücklich ungeprüft.
+            //
+            // Keine automatische Aktivierung.
+
+            new(
+                "hil2",
+                "HIL2",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // HostKarma – Sprint 30.3
@@ -466,12 +522,64 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // IBM DNS Blacklist – Sprint 30.6
             // ==========================================
 
-            new("ibm-dns-blacklist", "IBM DNS Blacklist"),
+            // Historische DNS-Zone:
+            // dnsbl.cobion.com
+            //
+            // IP-basierte Spam-Reputationsquelle.
+            //
+            // Historisch Bestandteil der
+            // IBM Proventia Mail Security
+            // und Lotus Protector for
+            // Mail Security Produkte.
+            //
+            // Eine externe öffentliche
+            // Nutzungsfreigabe ergibt sich
+            // aus der Produktintegration nicht.
+            //
+            // Deshalb bleibt die Berechtigung
+            // für unser Monitoring ungeprüft.
+            //
+            // Keine automatische Aktivierung.
 
-            new("icmforbidden", "ICMFORBIDDEN"),
+            new(
+                "ibm-dns-blacklist",
+                "IBM DNS Blacklist",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // ICMFORBIDDEN – Sprint 30.6
+            // ==========================================
+
+            // Historische DNS-Zone:
+            // forbidden.icm.edu.pl
+            //
+            // IPv4-basierte Reputationsquelle
+            // aus dem ICM-Umfeld.
+            //
+            // Die historische Beschreibung
+            // bezieht sich insbesondere
+            // auf offene Mail-Relays.
+            //
+            // Eine erfolgreiche DNS-Antwort
+            // oder Nutzungsfreigabe für unser
+            // Monitoring ist nicht bestätigt.
+            //
+            // Anbieterprofil erst nach
+            // kontrollierter DNS-Prüfung.
+
+            new(
+                "icmforbidden",
+                "ICMFORBIDDEN",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // IMP – Sprint 30.4
@@ -538,14 +646,105 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.IpNetwork),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // JIPPG – Sprint 30.6
             // ==========================================
 
-            new("jippg", "JIPPG"),
+            // DNS-Zone:
+            // mail-abuse.blacklist.jippg.org
+            //
+            // Japanisches Relay Blackhole
+            // List Project.
+            //
+            // IPv4-basierte DNSBL.
+            //
+            // Die Quelle berücksichtigt
+            // auch Informationen anderer
+            // Reputationslisten.
+            //
+            // Historisch dokumentierter
+            // Listungscode:
+            // 127.0.0.2
+            //
+            // Externe Verzeichnisse haben
+            // noch 2026 Listungen beobachtet.
+            //
+            // Dies allein bestätigt weder
+            // dauerhafte Erreichbarkeit noch
+            // Nutzungsfreigabe.
+            //
+            // Vor einer Aktivierung müssen
+            // Kontrollabfragen erfolgen.
 
-            new("kemptbl", "KEMPTBL"),
+            new(
+                "jippg",
+                "JIPPG",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
-            new("konstant", "Konstant"),
+            // ==========================================
+            // KEMPTBL – Sprint 30.6
+            // ==========================================
+
+            // DNS-Zone:
+            // dnsbl.kempt.net
+            //
+            // Kempt.net DNS Black List.
+            //
+            // Erkennt auffällige Mailserver
+            // anhand empfangener Spam-Nachrichten.
+            //
+            // Die historische MXToolbox-
+            // Beschreibung erwähnt auch
+            // mögliche Subnetzlistungen.
+            //
+            // Daher wird der fachliche Umfang
+            // vorläufig als Mixed eingeordnet.
+            //
+            // Eine aktuelle Bestätigung der
+            // Netzlistungspraxis steht noch aus.
+            //
+            // Die Freigabe für regelmäßiges
+            // externes Monitoring ist ungeprüft.
+
+            new(
+                "kemptbl",
+                "KEMPTBL",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.Mixed),
+
+            // ==========================================
+            // Konstant – Sprint 30.6
+            // ==========================================
+
+            // Historische DNS-Zone:
+            // bl.konstant.no
+            //
+            // Norwegische IPv4-DNSBL.
+            //
+            // Historisch basierend auf
+            // Spamfallen und gemeldeten
+            // Spamquellen.
+            //
+            // Externe DNS-Prüfungen zeigen
+            // Hinweise auf fehlende Antworten.
+            //
+            // Daraus wird ohne Bestätigung
+            // des Betreibers noch kein
+            // formeller Discontinued-Status.
+            //
+            // Keine automatische Aktivierung.
+
+            new(
+                "konstant",
+                "Konstant",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // LASHBACK – Sprint 30.4
@@ -627,14 +826,101 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // NETHERRELAYS – Sprint 30.6
             // ==========================================
 
-            new("netherrelays", "NETHERRELAYS"),
+            // Historische DNS-Zone:
+            // relays.nether.net
+            //
+            // IPv4-basierte Open-Relay-Liste.
+            //
+            // Der Betreiber untersuchte
+            // auffällige Mailserver auf
+            // unerlaubte Weiterleitung.
+            //
+            // Die DNS-Zone wird in externen
+            // Verzeichnissen dokumentiert.
+            //
+            // Aktuelle Erreichbarkeit und
+            // Nutzungsbedingungen sind
+            // nicht abschließend bestätigt.
+            //
+            // Keine automatische Aktivierung.
 
-            new("netherunsure", "NETHERUNSURE"),
+            new(
+                "netherrelays",
+                "NETHERRELAYS",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
-            new("nosolicitado", "NoSolicitado"),
+            // ==========================================
+            // NETHERUNSURE – Sprint 30.6
+            // ==========================================
+
+            // Historische DNS-Zone:
+            // unsure.nether.net
+            //
+            // Zweite Reputationskategorie
+            // des historischen Nether.net-
+            // Open-Relay-Projekts.
+            //
+            // Nicht mit der bestätigten
+            // Relay-Liste gleichzusetzen.
+            //
+            // Insbesondere dürfen Treffer
+            // nicht ungeprüft als identische
+            // Befunde interpretiert werden.
+            //
+            // Aktuelle DNS-Erreichbarkeit
+            // und Zugangsrechte ungeprüft.
+
+            new(
+                "netherunsure",
+                "NETHERUNSURE",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
+
+            // ==========================================
+            // NoSolicitado – Sprint 30.6
+            // ==========================================
+
+            // DNS-Zone:
+            // bl.nosolicitado.org
+            //
+            // Spanischsprachige IPv4-DNSBL
+            // gegen unerwünschte E-Mails.
+            //
+            // Verschiedene Verzeichnisse
+            // widersprechen sich hinsichtlich
+            // des aktuellen Betriebsstatus.
+            //
+            // Allerdings wurden im Oktober
+            // 2026 erfolgreiche Kontrollen
+            // und tatsächliche Listungen
+            // dokumentiert.
+            //
+            // Daher ausdrücklich nicht
+            // als Discontinued klassifiziert.
+            //
+            // Historisch dokumentierter
+            // Listungscode:
+            // 127.0.0.2
+            //
+            // Vor einer Integration werden
+            // aktuelle DNS-Kontrollen und
+            // Nutzungsbedingungen geprüft.
+
+            new(
+                "nosolicitado",
+                "NoSolicitado",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // PSBL – bereits aktiv
@@ -682,10 +968,42 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // RBL JP – Sprint 30.6
             // ==========================================
 
-            new("rbl-jp", "RBL JP"),
+            // Historische japanische DNSBL-Familie.
+            //
+            // Dokumentierte IPv4-Zonen:
+            // all.rbl.jp
+            // short.rbl.jp
+            // virus.rbl.jp
+            //
+            // Zusätzlich existierten getrennte
+            // domainbezogene Listen.
+            //
+            // Der MXToolbox-Referenzeintrag
+            // wird historisch als IP-basierte
+            // Reputationsprüfung geführt.
+            //
+            // Die genaue Zuordnung einer
+            // einzelnen Zone zur MXToolbox-
+            // Referenz ist nicht abschließend
+            // unabhängig bestätigt.
+            //
+            // Deshalb wird keine Zone als
+            // verbindliches Anbieterprofil
+            // aktiviert.
+            //
+            // Aktueller Betrieb und
+            // Nutzungsfreigabe ungeprüft.
+
+            new(
+                "rbl-jp",
+                "RBL JP",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // s5h.net – Sprint 30.3
@@ -702,7 +1020,43 @@ public static class BlacklistCatalog
                 BlacklistQueryMethod.Dns,
                 BlacklistReputationScope.SingleIp),
 
-            new("schulte", "SCHULTE"),
+            // ==========================================
+            // SCHULTE – Sprint 30.6
+            // ==========================================
+
+            // DNS-Zone:
+            // rbl.schulte.org
+            //
+            // Betreibergeführte IPv4-DNSBL.
+            //
+            // Der Betreiber dokumentiert
+            // ausdrücklich die öffentliche
+            // Verwendung per DNS-Abfrage.
+            //
+            // Neben Einzeladressen werden
+            // unter bestimmten Bedingungen
+            // größere Netzbereiche wie
+            // /24 und /16 berücksichtigt.
+            //
+            // Daher:
+            // TargetKind = IpAddress
+            // ReputationScope = Mixed
+            //
+            // Die dokumentierte Erlaubnis
+            // ersetzt keine Prüfung der
+            // aktuellen DNS-Erreichbarkeit.
+            //
+            // Vor einer Aktivierung müssen
+            // Kontrolladressen und Rückgabecodes
+            // verifiziert werden.
+
+            new(
+                "schulte",
+                "SCHULTE",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.Permitted,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.Mixed),
 
             // ==========================================
             // Spam Eating Monkey
@@ -725,14 +1079,91 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // Sender Score – Sprint 30.6
             // ==========================================
+
+            // Betreiber:
+            // Validity / ehemaliges Return Path.
+            //
+            // DNS-Zone:
+            // bl.score.senderscore.com
+            //
+            // IP-basierte Blocklist.
+            //
+            // Nicht mit dem separaten
+            // numerischen Sender Score
+            // von 0 bis 100 verwechseln.
+            //
+            // Seit 2024 dokumentiert
+            // Validity Beschränkungen bei
+            // mehr als 10000 DNS-Abfragen
+            // innerhalb von 30 Tagen.
+            //
+            // Eine Anbieterregistrierung
+            // kann erforderlich werden.
+            //
+            // Vor Implementierung müssen
+            // die aktuellen Vertrags- und
+            // Nutzungsbedingungen geprüft
+            // und die erforderlichen
+            // Berechtigungen geklärt werden.
+            //
+            // Unbekannte oder abweisende
+            // DNS-Rückgabecodes dürfen
+            // nicht als Listung oder
+            // Nichtlistung interpretiert werden.
+            //
+            // Keine automatische Aktivierung.
 
             new(
                 "sender-score-reputation-network",
-                "Sender Score Reputation Network"),
+                "Sender Score Reputation Network",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
-            new("servicesnet", "SERVICESNET"),
+            // ==========================================
+            // SERVICESNET – Sprint 30.6
+            // ==========================================
+
+            // Historische DNS-Zone:
+            // korea.services.net
+            //
+            // South Korean Network Blocking List.
+            //
+            // Bewertet IP-Netzbereiche,
+            // insbesondere geografisch
+            // zugeordnete koreanische Netze.
+            //
+            // Berücksichtigt außerdem
+            // bestimmte ältere Netzbereiche
+            // mit dokumentierter Spamproblematik.
+            //
+            // Es handelt sich nicht um eine
+            // klassische Einzel-IP-Liste.
+            //
+            // Daher:
+            // TargetKind = IpAddress
+            // ReputationScope = IpNetwork
+            //
+            // Ein Treffer weist nicht zwingend
+            // auf aktuellen Spamversand hin.
+            //
+            // Eine automatische Bewertung
+            // als kompromittierter Mailserver
+            // wäre fachlich falsch.
+            //
+            // Nutzungsbedingungen und
+            // DNS-Kontrollen bleiben offen.
+
+            new(
+                "servicesnet",
+                "SERVICESNET",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.IpNetwork),
 
             // ==========================================
             // SpamCop
@@ -789,10 +1220,48 @@ public static class BlacklistCatalog
                 BlacklistReputationScope.SingleIp),
 
             // ==========================================
-            // Weitere offene Referenzquellen
+            // TRIUMF – Sprint 30.6
             // ==========================================
 
-            new("triumf", "TRIUMF"),
+            // Historische DNS-Zone:
+            // rbl2.triumf.ca
+            //
+            // IPv4-basierte DNSBL aus dem
+            // TRIUMF-Mailserverumfeld.
+            //
+            // Dokumentierte Rückgabecodes:
+            //
+            // 127.0.0.2
+            // Auffällige SpamAssassin-Bewertung
+            //
+            // 127.0.0.3
+            // Spamfallen-Treffer
+            //
+            // 127.0.0.4
+            // Meldung durch TRIUMF-Benutzer
+            //
+            // 127.0.0.5
+            // Manuelle Aufnahme
+            //
+            // Die Codes stammen aus historischer
+            // Dokumentation und müssen vor einer
+            // Integration erneut geprüft werden.
+            //
+            // Externe Prüfungen zeigten zuletzt
+            // keine erfolgreiche Positivkontrolle.
+            //
+            // Keine Aussage über eine formelle
+            // Einstellung des Dienstes.
+            //
+            // Keine automatische Aktivierung.
+
+            new(
+                "triumf",
+                "TRIUMF",
+                BlacklistTargetKind.IpAddress,
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistQueryMethod.Dns,
+                BlacklistReputationScope.SingleIp),
 
             // ==========================================
             // GBUdb TRUNCATE – Sprint 30.5

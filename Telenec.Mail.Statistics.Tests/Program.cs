@@ -308,6 +308,116 @@ internal static class Program
                 BlacklistReputationScope.Mixed)
         };
 
+    // ================================================
+    // Sprint 30.6
+    // ================================================
+
+    /*
+     * Abschließende Klassifizierung der letzten
+     * 15 historischen Referenzquellen.
+     *
+     * Alle Einträge sind als IPv4-basierte
+     * DNS-Reputationsquellen dokumentiert.
+     *
+     * Das bedeutet weder eine bestätigte
+     * aktuelle Erreichbarkeit noch eine
+     * automatische Nutzungsfreigabe.
+     *
+     * HIL und Sender Score erfordern eine
+     * gesonderte Autorisierung.
+     *
+     * SCHULTE ist aufgrund dokumentierter
+     * öffentlicher Nutzung als Permitted
+     * klassifiziert.
+     *
+     * Alle übrigen bleiben auf NotReviewed.
+     *
+     * SERVICESNET bewertet Netzbereiche.
+     * SCHULTE und KEMPTBL berücksichtigen
+     * auch netzbezogene Listungen.
+     *
+     * Diese Tests führen keine DNS-Abfragen aus
+     * und aktivieren keine Anbieterprofile.
+     */
+    private static readonly CatalogMetadataExpectation[]
+        Sprint306Expectations =
+        {
+            new(
+                "hil",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "hil2",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "ibm-dns-blacklist",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "icmforbidden",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "jippg",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "kemptbl",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.Mixed),
+
+            new(
+                "konstant",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "netherrelays",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "netherunsure",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "nosolicitado",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "rbl-jp",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "schulte",
+                BlacklistAccessStatus.Permitted,
+                BlacklistReputationScope.Mixed),
+
+            new(
+                "sender-score-reputation-network",
+                BlacklistAccessStatus.RequiresProviderAuthorization,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "servicesnet",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.IpNetwork),
+
+            new(
+                "triumf",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp)
+        };
+
     private static async Task<int> Main()
     {
         var passed = 0;
@@ -636,6 +746,30 @@ internal static class Program
                 $"Anbieter-Metadaten: {expectation.Id}",
                 () => CheckIpProviderMetadataAsync(expectation));
         }
+
+        // ================================================
+        // Sprint 30.6
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30.6");
+        Console.WriteLine();
+
+        foreach (var expectation in Sprint306Expectations)
+        {
+            await Test(
+                $"Anbieter-Metadaten: {expectation.Id}",
+                () => CheckIpProviderMetadataAsync(expectation));
+        }
+
+        await Test(
+            "Alle 68 Referenzen technisch klassifiziert",
+            CheckAllSourcesClassifiedAsync);
+
+        await Test(
+            "Neue Quellen ohne Prüfergebnis bleiben offen",
+            CheckSprint306NotIntegratedAsync);
 
         Console.WriteLine();
         Console.WriteLine(
@@ -1792,7 +1926,7 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.2–30.5 – Metadatenprüfungen
+    // Sprint 30.2–30.6 – Metadatenprüfungen
     // ===================================================
 
     /// <summary>
@@ -1887,6 +2021,121 @@ internal static class Program
                 entry.IsListed is null,
                 $"{expectation.Id}: Es darf kein " +
                 "fiktives Prüfergebnis erscheinen.");
+
+            Assert(
+                entry.AccessStatus ==
+                    expectation.AccessStatus.ToString(),
+                $"{expectation.Id}: Der Zugangsstatus " +
+                "wird in der Übersicht falsch ausgegeben.");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // ===================================================
+    // Sprint 30.6 – Vollständigkeit und Isolation
+    // ===================================================
+
+    private static Task CheckAllSourcesClassifiedAsync()
+    {
+        var entries = BlacklistCatalog.Entries;
+
+        Assert(
+            entries.Count == 68,
+            "Der Referenzkatalog muss weiterhin " +
+            "exakt 68 Einträge enthalten.");
+
+        var unclassified = entries
+            .Where(entry =>
+                entry.TargetKind ==
+                    BlacklistTargetKind.Unclassified ||
+                entry.QueryMethod ==
+                    BlacklistQueryMethod.Unclassified ||
+                entry.ReputationScope ==
+                    BlacklistReputationScope.Unclassified)
+            .Select(entry => entry.Id)
+            .ToArray();
+
+        Assert(
+            unclassified.Length == 0,
+            "Technisch unklassifizierte Quellen: " +
+            string.Join(", ", unclassified));
+
+        Assert(
+            Sprint306Expectations.Length == 15,
+            "Sprint 30.6 muss genau 15 Quellen absichern.");
+
+        Assert(
+            Sprint306Expectations
+                .Select(expectation => expectation.Id)
+                .Distinct(StringComparer.Ordinal)
+                .Count() == 15,
+            "Sprint 30.6 enthält doppelte Referenzkennungen.");
+
+        return Task.CompletedTask;
+    }
+
+    private static Task CheckSprint306NotIntegratedAsync()
+    {
+        var currentResults =
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal);
+
+        foreach (var id in ActiveBlacklistIds)
+        {
+            currentResults.Add(
+                id,
+                Result(
+                    id,
+                    TestIp,
+                    BlacklistCheckStatus.NotListed));
+        }
+
+        var overview = BlacklistOverviewFactory.Create(
+            currentResults);
+
+        Assert(
+            overview.TotalCount == 68,
+            "Die Übersicht muss 68 Referenzen enthalten.");
+
+        Assert(
+            overview.IntegratedCount == 7,
+            "Es dürfen nur sieben Quellen als " +
+            "integriert ausgewiesen werden.");
+
+        Assert(
+            overview.NotIntegratedCount == 61,
+            "Es müssen weiterhin 61 Quellen " +
+            "als nicht integriert erscheinen.");
+
+        Assert(
+            overview.NotListedCount == 7,
+            "Es dürfen nur sieben simulierte " +
+            "Negativbefunde vorliegen.");
+
+        foreach (var expectation in Sprint306Expectations)
+        {
+            Assert(
+                !ActiveBlacklistIds.Contains(
+                    expectation.Id,
+                    StringComparer.Ordinal),
+                $"{expectation.Id}: Die Quelle wurde " +
+                "unerwartet als aktiv registriert.");
+
+            var entry = overview.Entries.Single(
+                item => item.Id == expectation.Id);
+
+            Assert(
+                entry.Status == "NotIntegrated",
+                $"{expectation.Id}: Ohne tatsächliches " +
+                "Prüfergebnis muss NotIntegrated gelten.");
+
+            Assert(
+                !entry.IsConclusive &&
+                entry.IsListed is null,
+                $"{expectation.Id}: Ein nicht ausgeführter " +
+                "Check darf weder als gelistet noch " +
+                "als nicht gelistet erscheinen.");
 
             Assert(
                 entry.AccessStatus ==

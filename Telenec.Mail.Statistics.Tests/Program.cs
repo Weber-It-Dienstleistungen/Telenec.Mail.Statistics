@@ -1,4 +1,6 @@
 ﻿
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Telenec.Mail.Statistics.Server.Reputation;
@@ -771,6 +773,35 @@ internal static class Program
             "Neue Quellen ohne Prüfergebnis bleiben offen",
             CheckSprint306NotIntegratedAsync);
 
+        // ================================================
+        // Sprint 30.7
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Monitoring – Sprint 30.7");
+        Console.WriteLine();
+
+        await Test(
+            "Acht registrierte Prüfer einschließlich DroneBL",
+            CheckSprint307ApprovedProvidersAsync);
+
+        await Test(
+            "PSBL bleibt rückwärtskompatibel",
+            CheckSprint307PsblCompatibilityAsync);
+
+        await Test(
+            "Alle acht Prüfer starten ungeprüft",
+            CheckSprint307InitialStateAsync);
+
+        await Test(
+            "Übersicht: acht ungeprüft und 60 offen",
+            CheckSprint307OverviewAsync);
+
+        await Test(
+            "DroneBL aktiv, SpamCop weiterhin inaktiv",
+            CheckSprint307DroneBlIsolationAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");
@@ -924,7 +955,7 @@ internal static class Program
         Assert(
             results["spamcop"].Status ==
                 BlacklistCheckStatus.Listed &&
-            results["spamcop"].IsListed == true,
+                results["spamcop"].IsListed == true,
             "Simulierter Listungstreffer ist falsch.");
 
         Assert(
@@ -952,7 +983,7 @@ internal static class Program
 
         Assert(
             results.Count == 2,
-            "Ein Ergebnis fehlt.");
+            "Funktionierender Anbieter wurde beeinträchtigt.");
 
         Assert(
             results["psbl"].Status ==
@@ -981,8 +1012,7 @@ internal static class Program
             TestIp);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Null-Ergebnis wurde akzeptiert.");
     }
 
@@ -999,8 +1029,7 @@ internal static class Program
             TestIp);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Falsche Blacklist-Kennung wurde akzeptiert.");
     }
 
@@ -1017,8 +1046,7 @@ internal static class Program
             TestIp);
 
         Assert(
-            results["psbl"].Status ==
-                BlacklistCheckStatus.Failed,
+            results["psbl"].Status == BlacklistCheckStatus.Failed,
             "Falsches Prüfziel wurde akzeptiert.");
     }
 
@@ -2143,6 +2171,160 @@ internal static class Program
                 $"{expectation.Id}: Der Zugangsstatus " +
                 "wird in der Übersicht falsch ausgegeben.");
         }
+
+        return Task.CompletedTask;
+    }
+
+    // ===================================================
+    // Sprint 30.7 – Tatsächliche Monitoring-Registrierung
+    // ===================================================
+
+    /// <summary>
+    /// Erstellt einen Monitoring-Snapshot unmittelbar
+    /// nach der Konstruktion des BackgroundService.
+    ///
+    /// Der Dienst wird absichtlich nicht gestartet:
+    /// Es finden keine DNS- oder Blacklist-Abfragen statt.
+    /// </summary>
+    private static BlacklistMonitoringSnapshot
+        CreateSprint307InitialSnapshot()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["Reputation:Hostname"] = "monitoring.example",
+                    ["Reputation:ExpectedIpv4"] = TestIp
+                })
+            .Build();
+
+        using var service = new BlacklistMonitoringService(
+            configuration,
+            TimeProvider.System,
+            NullLogger<BlacklistMonitoringService>.Instance);
+
+        return service.GetSnapshot();
+    }
+
+    private static Task CheckSprint307ApprovedProvidersAsync()
+    {
+        var snapshot = CreateSprint307InitialSnapshot();
+
+        var expectedIds = new[]
+        {
+            "psbl",
+            "0spam",
+            "0spam-rbl",
+            "drone-bl",
+            "uceprotectl1",
+            "blocklist-de",
+            "uceprotectl2",
+            "uceprotectl3"
+        };
+
+        Assert(
+            snapshot.Results.Count == expectedIds.Length,
+            "Erwartet werden exakt acht registrierte Prüfer.");
+
+        Assert(
+            snapshot.Results.Keys
+                .ToHashSet(StringComparer.Ordinal)
+                .SetEquals(expectedIds),
+            "Die tatsächlichen Anbieter stimmen nicht mit " +
+            "der freigegebenen Acht-Anbieter-Liste überein.");
+
+        return Task.CompletedTask;
+    }
+
+    private static Task CheckSprint307PsblCompatibilityAsync()
+    {
+        var snapshot = CreateSprint307InitialSnapshot();
+
+        Assert(
+            snapshot.Results.Keys.First() == "psbl",
+            "PSBL muss erster registrierter Prüfer bleiben.");
+
+        Assert(
+            ReferenceEquals(
+                snapshot.Result,
+                snapshot.Results["psbl"]),
+            "Die bisherige PSBL-Result-Eigenschaft " +
+            "darf sich nicht verändern.");
+
+        return Task.CompletedTask;
+    }
+
+    private static Task CheckSprint307InitialStateAsync()
+    {
+        var snapshot = CreateSprint307InitialSnapshot();
+
+        Assert(
+            snapshot.ExpectedIpv4 == TestIp &&
+            snapshot.Hostname == "monitoring.example",
+            "Die Testkonfiguration wurde nicht übernommen.");
+
+        Assert(
+            snapshot.LastAttemptUtc is null &&
+            snapshot.LastSuccessfulCheckUtc is null,
+            "Vor dem ersten Durchlauf dürfen " +
+            "keine Prüfzeitpunkte gesetzt sein.");
+
+        Assert(
+            snapshot.Results.Values.All(result =>
+                result.Status == BlacklistCheckStatus.NotChecked &&
+                !result.IsConclusive &&
+                result.IsListed is null &&
+                result.CheckedTarget == TestIp),
+            "Ein noch ungeprüfter Anbieter wurde " +
+            "als geprüft oder nicht gelistet ausgewiesen.");
+
+        return Task.CompletedTask;
+    }
+
+    private static Task CheckSprint307OverviewAsync()
+    {
+        var snapshot = CreateSprint307InitialSnapshot();
+        var overview = BlacklistOverviewFactory.Create(
+            snapshot.Results);
+
+        Assert(
+            overview.TotalCount == 68 &&
+            overview.IntegratedCount == 8 &&
+            overview.NotIntegratedCount == 60 &&
+            overview.NotCheckedCount == 8 &&
+            overview.NotListedCount == 0 &&
+            overview.ListedCount == 0 &&
+            overview.WarningCount == 0,
+            "Die Übersicht muss acht registrierte, ungeprüfte " +
+            "und 60 nicht integrierte Quellen enthalten.");
+
+        return Task.CompletedTask;
+    }
+
+    private static Task CheckSprint307DroneBlIsolationAsync()
+    {
+        var snapshot = CreateSprint307InitialSnapshot();
+        var overview = BlacklistOverviewFactory.Create(
+            snapshot.Results);
+
+        var droneBl = overview.Entries.Single(
+            entry => entry.Id == "drone-bl");
+
+        Assert(
+            droneBl.Status == "NotChecked" &&
+            !droneBl.IsConclusive &&
+            droneBl.IsListed is null,
+            "DroneBL muss registriert, aber bis zur " +
+            "ersten echten Prüfung ungeprüft sein.");
+
+        var spamCop = overview.Entries.Single(
+            entry => entry.Id == "spamcop");
+
+        Assert(
+            spamCop.Status == "NotIntegrated" &&
+            !spamCop.IsConclusive &&
+            spamCop.IsListed is null,
+            "SpamCop darf nicht versehentlich aktiviert werden.");
 
         return Task.CompletedTask;
     }

@@ -81,6 +81,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
          * Erste Gruppe:
          * - 0spam
          * - 0spam RBL
+         * - DroneBL
          * - UCEPROTECT Level 1
          *
          * Zweite Gruppe:
@@ -90,11 +91,12 @@ public sealed class BlacklistMonitoringService : BackgroundService
          *
          * PSBL wird separat registriert.
          *
-         * Damit sind insgesamt sieben
+         * Damit sind insgesamt acht
          * Reputationslisten aktiv.
          *
-         * DroneBL bleibt wegen der ungeklärten
-         * lokalen DNS-Auflösung deaktiviert.
+         * DroneBL wurde nach erfolgreicher
+         * Positiv- und Negativkontrolle
+         * auf dem Ubuntu-Server freigegeben.
          *
          * SpamCop bleibt deaktiviert, bis die
          * Nutzungsbedingungen für unseren
@@ -109,6 +111,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
             {
                 "0spam",
                 "0spam-rbl",
+                "drone-bl",
                 "uceprotectl1",
                 "blocklist-de",
                 "uceprotectl2",
@@ -318,7 +321,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 {
                     /*
                      * Ein gemeinsamer Batch für
-                     * alle sieben Anbieter.
+                     * alle acht Anbieter.
                      *
                      * Jeder Anbieter liefert sein
                      * eigenes Prüfergebnis.
@@ -363,7 +366,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
          * PSBL.
          *
          * Die Results-Sammlung enthält alle
-         * sieben aktiven Anbieter.
+         * acht aktiven Anbieter.
          */
 
         var psblResult = results["psbl"];

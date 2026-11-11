@@ -170,15 +170,7 @@ internal static class Program
 
     /*
      * Sprint 30.3:
-     *
-     * Sieben weitere IPv4-DNSBL-Anbieter.
-     *
-     * Zugang bleibt NotReviewed.
-     * Die Katalogklassifizierung allein
-     * bedeutet keine Nutzungsfreigabe.
-     *
-     * Suomispam und SPFBL besitzen
-     * gemischte Bewertungsumfänge.
+     * Sieben zusätzliche IPv4-DNSBL-Anbieter.
      */
     private static readonly CatalogMetadataExpectation[]
         Sprint303Expectations =
@@ -217,6 +209,59 @@ internal static class Program
                 "spfbl-dnsbl",
                 BlacklistAccessStatus.NotReviewed,
                 BlacklistReputationScope.Mixed)
+        };
+
+    /*
+     * Sprint 30.4:
+     * Sieben weitere Anbieter.
+     *
+     * IMP SPAM, IMP WORM, INTERSERVER,
+     * LASHBACK, MSRBL Phishing, MSRBL Spam
+     * und SWINOG.
+     *
+     * Die technische DNS-Klassifizierung
+     * ist noch keine Nutzungsfreigabe.
+     *
+     * Diese Daten werden ausschließlich
+     * auf Katalogebene getestet.
+     */
+    private static readonly CatalogMetadataExpectation[]
+        Sprint304Expectations =
+        {
+            new(
+                "imp-spam",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "imp-worm",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "interserver",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "lashback",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "msrbl-phishing",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "msrbl-spam",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp),
+
+            new(
+                "swinog",
+                BlacklistAccessStatus.NotReviewed,
+                BlacklistReputationScope.SingleIp)
         };
 
     private static async Task<int> Main()
@@ -508,17 +553,29 @@ internal static class Program
             "Neue Katalogeinträge werden nicht automatisch aktiv",
             CheckSprint302InactiveAsync);
 
-        // ================================================
-        // Sprint 30.3:
-        // Sieben zusätzliche Katalogtests.
-        // ================================================
-
         Console.WriteLine();
         Console.WriteLine(
             "Blacklist-Katalog – Sprint 30.3");
         Console.WriteLine();
 
         foreach (var expectation in Sprint303Expectations)
+        {
+            await Test(
+                $"Anbieter-Metadaten: {expectation.Id}",
+                () => CheckIpProviderMetadataAsync(expectation));
+        }
+
+        // ================================================
+        // Sprint 30.4:
+        // Sieben zusätzliche Katalogtests.
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Blacklist-Katalog – Sprint 30.4");
+        Console.WriteLine();
+
+        foreach (var expectation in Sprint304Expectations)
         {
             await Test(
                 $"Anbieter-Metadaten: {expectation.Id}",
@@ -1680,17 +1737,15 @@ internal static class Program
     }
 
     // ===================================================
-    // Sprint 30.2 und 30.3 – gemeinsame Metadatenprüfung
+    // Sprint 30.2 bis 30.4:
+    // Gemeinsame Metadatenprüfung
     // ===================================================
 
     /// <summary>
     /// Prüft einen IPv4-DNSBL-Katalogeintrag.
     ///
-    /// Diese Methode führt ausdrücklich
-    /// keine externe DNS-Abfrage aus.
-    ///
-    /// Bewertet werden nur die im Katalog
-    /// gespeicherten technischen Metadaten.
+    /// Führt ausdrücklich keine externe
+    /// DNS-Abfrage durch.
     /// </summary>
     private static Task CheckIpProviderMetadataAsync(
         CatalogMetadataExpectation expectation)

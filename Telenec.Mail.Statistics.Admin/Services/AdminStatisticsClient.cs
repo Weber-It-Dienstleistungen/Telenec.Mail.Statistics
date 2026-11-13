@@ -124,6 +124,7 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
          * Es werden keine zusätzlichen
          * Zugangsdaten benötigt.
          */
+
         var baseUri =
             await _baseUrlProvider.GetBaseUriAsync(
                 cancellationToken);
@@ -143,6 +144,7 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
          * Der vorhandene Admin-API-Schlüssel
          * wird im X-Admin-Key-Header übertragen.
          */
+
         using var request =
             new HttpRequestMessage(
                 HttpMethod.Get,
@@ -163,6 +165,7 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
          * wird ausdrücklich unterschieden
          * von anderen HTTP-Fehlern.
          */
+
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             throw new UnauthorizedAccessException(
@@ -172,20 +175,15 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
         /*
          * Andere HTTP-Fehler werden an
          * die aufrufende Komponente weitergegeben.
-         *
-         * Dadurch können wir später beispielsweise
-         * zwischen Serverausfall und fehlender
-         * API-Unterstützung unterscheiden.
          */
+
         response.EnsureSuccessStatusCode();
 
         /*
          * JSON-Antwort in unser WPF-Datenmodell
          * deserialisieren.
-         *
-         * Die Statuswerte werden als Zeichenfolgen
-         * eingelesen, beispielsweise "NotListed".
          */
+
         var reputation =
             await response.Content
                 .ReadFromJsonAsync<ReputationMonitoringResponse>(
@@ -198,14 +196,13 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
         }
 
         /*
-         * Die Antwort muss mindestens die
-         * grundlegenden Identifikationsdaten
-         * des überwachten Hosts enthalten.
+         * Grundlegende Validierung.
          *
          * Unvollständige Antworten dürfen
          * nicht als erfolgreiches Monitoring
          * interpretiert werden.
          */
+
         if (string.IsNullOrWhiteSpace(reputation.Hostname)
             || string.IsNullOrWhiteSpace(reputation.ExpectedIpv4)
             || reputation.Result is null
@@ -216,13 +213,6 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
                 "Die Reputationsantwort des Statistikservers ist unvollständig.");
         }
 
-        /*
-         * Vorhandene Zugangsdaten und
-         * Serverkonfiguration bestätigen.
-         *
-         * Dies entspricht dem bisherigen
-         * Verhalten des Statistik-Clients.
-         */
         await _apiKeyProvider.ConfirmApiKeyAsync(
             apiKey,
             cancellationToken);
@@ -232,5 +222,147 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
             cancellationToken);
 
         return reputation;
+    }
+
+    /// <summary>
+    /// Startet eine manuelle Blacklist-Prüfung
+    /// auf dem Statistikserver.
+    ///
+    /// API:
+    /// POST /api/v1/admin/reputation/check
+    ///
+    /// Die WPF-Anwendung führt selbst
+    /// keine DNSBL-Abfragen aus.
+    ///
+    /// HTTP 204 bedeutet:
+    /// Der serverseitige Prüfdurchlauf wurde
+    /// abgeschlossen.
+    ///
+    /// HTTP 204 bedeutet ausdrücklich nicht,
+    /// dass sämtliche Anbieter ein eindeutiges
+    /// Prüfergebnis geliefert haben.
+    ///
+    /// Die Ergebnisse werden anschließend
+    /// separat mit GetReputationAsync geladen.
+    /// </summary>
+    public async Task TriggerReputationCheckAsync(
+        CancellationToken cancellationToken = default)
+    {
+        /*
+         * Die bestehende Serveradresse und
+         * den vorhandenen Admin-Schlüssel
+         * wiederverwenden.
+         *
+         * Es werden keine separaten
+         * Blacklist-Zugangsdaten gespeichert.
+         */
+
+        var baseUri =
+            await _baseUrlProvider.GetBaseUriAsync(
+                cancellationToken);
+
+        var checkUri =
+            new Uri(
+                baseUri,
+                "api/v1/admin/reputation/check");
+
+        var apiKey =
+            await _apiKeyProvider.GetApiKeyAsync(
+                cancellationToken);
+
+        /*
+         * Nur POST löst eine Prüfung aus.
+         *
+         * GET bleibt eine rein lesende
+         * Statusabfrage.
+         */
+
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                checkUri);
+
+        request.Headers.TryAddWithoutValidation(
+            AdminApiKeyHeaderName,
+            apiKey);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+        /*
+         * Fehlerzustände ausdrücklich
+         * unterscheiden.
+         *
+         * So kann MiPos Oberfläche später
+         * verständliche Meldungen anzeigen.
+         */
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new UnauthorizedAccessException(
+                "Der Admin-API-Schlüssel wurde vom Server abgelehnt.");
+        }
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            throw new InvalidOperationException(
+                "Auf dem Statistikserver läuft bereits eine Blacklist-Prüfung.");
+        }
+
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            throw new InvalidOperationException(
+                "Das Limit für manuelle Blacklist-Prüfungen wurde erreicht. Bitte später erneut versuchen.");
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound
+            || response.StatusCode == HttpStatusCode.MethodNotAllowed)
+        {
+            throw new NotSupportedException(
+                "Der Statistikserver unterstützt das manuelle Starten von Blacklist-Prüfungen noch nicht.");
+        }
+
+        /*
+         * Sonstige HTTP-Fehler ausdrücklich
+         * weiterreichen.
+         *
+         * Ein Serverfehler darf nicht
+         * als abgeschlossene Prüfung gelten.
+         */
+
+        response.EnsureSuccessStatusCode();
+
+        /*
+         * Der aktuelle Serververtrag liefert
+         * bei erfolgreicher Ausführung HTTP 204
+         * ohne Antwortinhalt.
+         *
+         * Andere erfolgreiche Antworten gelten
+         * hier nicht automatisch als Bestätigung
+         * eines abgeschlossenen Prüfdurchlaufs.
+         */
+
+        if (response.StatusCode != HttpStatusCode.NoContent)
+        {
+            throw new InvalidDataException(
+                "Der Statistikserver hat die Blacklist-Prüfung nicht mit HTTP 204 bestätigt.");
+        }
+
+        /*
+         * Erst nach bestätigtem Abschluss
+         * die verwendeten Zugangsdaten
+         * und die Serveradresse bestätigen.
+         */
+
+        await _apiKeyProvider.ConfirmApiKeyAsync(
+            apiKey,
+            cancellationToken);
+
+        await _baseUrlProvider.ConfirmBaseUriAsync(
+            baseUri,
+            cancellationToken);
     }
 }

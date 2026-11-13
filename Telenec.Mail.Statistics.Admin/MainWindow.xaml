@@ -910,7 +910,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Überschrift und Prüfumfang -->
+                    <!-- Überschrift, manueller Start und Prüfumfang -->
 
                     <Grid Grid.Row="0">
 
@@ -933,20 +933,64 @@
 
                         </StackPanel>
 
-                        <Border Grid.Column="1"
-                                Background="#EFF6FF"
-                                BorderBrush="#BFDBFE"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12,8"
-                                VerticalAlignment="Center">
+                        <!-- Manueller Blacklist-Check.
+                             Der AsyncRelayCommand verhindert
+                             während der Ausführung weitere Klicks. -->
 
-                            <TextBlock Text="{Binding ReputationScopeText}"
-                                       FontSize="12"
-                                       Foreground="#1D4ED8"
-                                       FontWeight="SemiBold" />
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
 
-                        </Border>
+                            <Button Command="{Binding CheckReputationCommand}"
+                                    Padding="16,9"
+                                    Margin="0,0,12,0"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Background="#0069B4"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Cursor="Hand">
+
+                                <Button.Style>
+
+                                    <Style TargetType="Button">
+
+                                        <Setter Property="Content"
+                                                Value="Jetzt prüfen" />
+
+                                        <Style.Triggers>
+
+                                            <DataTrigger Binding="{Binding IsReputationChecking}"
+                                                         Value="True">
+
+                                                <Setter Property="Content"
+                                                        Value="Prüfung läuft …" />
+
+                                            </DataTrigger>
+
+                                        </Style.Triggers>
+
+                                    </Style>
+
+                                </Button.Style>
+
+                            </Button>
+
+                            <Border Background="#EFF6FF"
+                                    BorderBrush="#BFDBFE"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="12,8"
+                                    VerticalAlignment="Center">
+
+                                <TextBlock Text="{Binding ReputationScopeText}"
+                                           FontSize="12"
+                                           Foreground="#1D4ED8"
+                                           FontWeight="SemiBold" />
+
+                            </Border>
+
+                        </StackPanel>
 
                     </Grid>
 
@@ -1038,6 +1082,15 @@
                                        Margin="0,3,0,0"
                                        TextWrapping="Wrap"
                                        MaxHeight="32" />
+
+                            <!-- Rückmeldung zum manuellen Prüfvorgang -->
+
+                            <TextBlock Text="{Binding ReputationCheckMessage}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="#1D4ED8"
+                                       Margin="0,8,0,0"
+                                       TextWrapping="Wrap" />
 
                         </StackPanel>
 

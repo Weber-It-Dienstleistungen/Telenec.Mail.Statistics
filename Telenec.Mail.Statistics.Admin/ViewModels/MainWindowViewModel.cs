@@ -186,6 +186,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         reputationEntries =
             Array.Empty<ReputationBlacklistRow>();
 
+    // Manueller Blacklist-Check.
+
+    [ObservableProperty]
+    private bool isReputationChecking;
+
+    [ObservableProperty]
+    private string reputationCheckMessage =
+        "Die Blacklist-Prüfung kann manuell gestartet werden.";
+
     // Die bestehenden Einstiegs- und
     // Aktualisierungsfunktionen bleiben erhalten.
 
@@ -202,6 +211,96 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await LoadStatisticsAsync(cancellationToken);
 
         await LoadReputationAsync(cancellationToken);
+    }
+
+    // Der Server-Check und das Laden seiner Ergebnisse
+    // sind zwei getrennte Vorgänge.
+    //
+    // Eine Erfolgsmeldung erscheint nur, wenn beide
+    // Vorgänge erfolgreich abgeschlossen wurden.
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    private async Task CheckReputationAsync(
+        CancellationToken cancellationToken)
+    {
+        if (IsReputationChecking)
+        {
+            return;
+        }
+
+        IsReputationChecking = true;
+
+        ReputationCheckMessage =
+            "Blacklist-Prüfung läuft auf dem Server …";
+
+        try
+        {
+            await _statisticsClient
+                .TriggerReputationCheckAsync(
+                    cancellationToken);
+
+            ReputationCheckMessage =
+                "Prüfung abgeschlossen. Ergebnisse werden geladen …";
+
+            var resultsLoaded =
+                await LoadReputationAsync(
+                    cancellationToken);
+
+            ReputationCheckMessage = resultsLoaded
+                ? "Blacklist-Prüfung abgeschlossen. " +
+                  "Die Ergebnisübersicht wurde aktualisiert."
+                : "Die serverseitige Blacklist-Prüfung wurde abgeschlossen, " +
+                  "aber die Ergebnisübersicht konnte nicht geladen werden. " +
+                  "Bitte die Ansicht über „Aktualisieren“ erneut laden.";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            ReputationCheckMessage =
+                "Prüfung nicht gestartet: " +
+                "Der Admin-API-Schlüssel wurde abgelehnt.";
+        }
+        catch (NotSupportedException exception)
+        {
+            ReputationCheckMessage =
+                exception.Message;
+        }
+        catch (InvalidOperationException exception)
+        {
+            ReputationCheckMessage =
+                exception.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ReputationCheckMessage =
+                "Blacklist-Prüfung fehlgeschlagen: " +
+                "Der Statistikserver ist nicht erreichbar " +
+                "oder hat einen HTTP-Fehler gemeldet.";
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            ReputationCheckMessage =
+                "Die Anfrage wurde abgebrochen. " +
+                "Ob die serverseitige Prüfung abgeschlossen wurde, " +
+                "kann nicht bestätigt werden.";
+        }
+        catch (TaskCanceledException)
+        {
+            ReputationCheckMessage =
+                "Zeitüberschreitung bei der Blacklist-Prüfung. " +
+                "Der serverseitige Zustand ist unklar. " +
+                "Bitte die Ergebnisse erneut laden.";
+        }
+        catch (Exception)
+        {
+            ReputationCheckMessage =
+                "Die manuelle Blacklist-Prüfung konnte " +
+                "nicht erfolgreich abgeschlossen werden.";
+        }
+        finally
+        {
+            IsReputationChecking = false;
+        }
     }
 
     // Bestehende Nutzungsstatistik.
@@ -280,8 +379,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     //
     // Dieser Bereich wird unabhängig von
     // der Nutzungsstatistik behandelt.
+    //
+    // Rückgabewert:
+    //
+    // true  = API-Abruf und Verarbeitung erfolgreich.
+    // false = API-Abruf oder Verarbeitung fehlgeschlagen.
+    //
+    // Ein fachlicher Blacklist-Status "Listed"
+    // ist dabei kein Fehler beim Datenabruf.
 
-    private async Task LoadReputationAsync(
+    private async Task<bool> LoadReputationAsync(
         CancellationToken cancellationToken)
     {
         IsReputationLoading = true;
@@ -296,12 +403,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
                         cancellationToken);
 
             ApplyReputation(reputation);
+
+            return true;
         }
         catch (UnauthorizedAccessException)
         {
             SetReputationError(
                 "Zugriff verweigert",
                 "Der Admin-API-Schlüssel wurde vom Server abgelehnt.");
+
+            return false;
         }
         catch (HttpRequestException exception)
             when (exception.StatusCode == HttpStatusCode.NotFound)
@@ -309,36 +420,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
             SetReputationError(
                 "Reputations-API nicht verfügbar",
                 "Der angesprochene Statistikserver unterstützt den Reputations-Endpunkt noch nicht.");
+
+            return false;
         }
         catch (HttpRequestException)
         {
             SetReputationError(
                 "Reputationsserver nicht erreichbar",
                 "Die Reputationsdaten konnten nicht vom Statistikserver abgerufen werden.");
+
+            return false;
         }
         catch (TaskCanceledException)
         {
             SetReputationError(
                 "Zeitüberschreitung",
                 "Die Reputationsabfrage hat zu lange gedauert.");
+
+            return false;
         }
         catch (JsonException)
         {
             SetReputationError(
                 "Ungültige API-Antwort",
                 "Der Statistikserver hat Reputationsdaten in einem unbekannten Format geliefert.");
+
+            return false;
         }
         catch (InvalidDataException)
         {
             SetReputationError(
                 "Unvollständige API-Antwort",
                 "Die Reputationsdaten des Statistikservers sind unvollständig.");
+
+            return false;
         }
         catch (Exception)
         {
             SetReputationError(
                 "Reputationsabfrage fehlgeschlagen",
                 "Beim Laden der Mailserver-Reputation ist ein unerwarteter Fehler aufgetreten.");
+
+            return false;
         }
         finally
         {

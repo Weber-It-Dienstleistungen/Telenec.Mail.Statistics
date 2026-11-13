@@ -7,6 +7,9 @@ namespace Telenec.Mail.Statistics.Server.Endpoints;
 
 public static class AdminEndpoints
 {
+    public const string BlacklistCheckRateLimitPolicyName =
+        "BlacklistManualCheck";
+
     private const string AdminApiKeyHeaderName =
         "X-Admin-Key";
 
@@ -14,36 +17,40 @@ public static class AdminEndpoints
         this IEndpointRouteBuilder endpoints)
     {
         /*
-         * Bestehender Statistik-Endpoint.
-         *
-         * Die vorhandene Funktion bleibt unverändert.
+         * Bestehende Nutzungsstatistik.
+         * Unveränderte Schnittstelle.
          */
         endpoints.MapGet(
             "/api/v1/admin/dashboard",
             HandleDashboardAsync);
 
         /*
-         * Geschützter Reputation-Endpoint.
+         * Liest ausschließlich den letzten
+         * Blacklist-Prüfzustand.
          *
-         * Liefert den aktuellen Monitoring-Snapshot
-         * sowie die vollständige Blacklist-Übersicht.
-         *
-         * Der API-Aufruf führt selbst keine DNS-
-         * oder Blacklist-Abfragen durch.
+         * GET löst keine DNS-Abfragen aus.
          */
         endpoints.MapGet(
             "/api/v1/admin/reputation",
             HandleReputation);
 
+        /*
+         * Geschützter manueller Prüfauslöser.
+         *
+         * Nur POST startet externe Abfragen.
+         *
+         * Zusätzlich gilt ein eigenes
+         * Rate-Limit für diese Schnittstelle.
+         */
+        endpoints.MapPost(
+                "/api/v1/admin/reputation/check",
+                HandleReputationCheckAsync)
+            .RequireRateLimiting(
+                BlacklistCheckRateLimitPolicyName);
+
         return endpoints;
     }
 
-    /// <summary>
-    /// Bestehende Nutzungsstatistik.
-    ///
-    /// Der Admin-API-Schlüssel wird vor dem Zugriff
-    /// auf die Statistikdaten geprüft.
-    /// </summary>
     private static async Task<IResult> HandleDashboardAsync(
         HttpRequest request,
         IAdminApiKeyValidator apiKeyValidator,
@@ -68,38 +75,17 @@ public static class AdminEndpoints
     }
 
     /// <summary>
-    /// Liefert den aktuellen Blacklist-Monitoring-Zustand.
+    /// Rückwärtskompatible Lese-API.
     ///
-    /// Der Zugriff ist durch denselben Admin-API-Schlüssel
-    /// geschützt wie die bestehende Nutzungsstatistik.
-    ///
-    /// Der Endpoint ist ausschließlich lesend.
-    ///
-    /// Die bisherige API-Antwort bleibt kompatibel.
-    /// Zusätzlich wird die vollständige Übersicht
-    /// aus dem BlacklistCatalog bereitgestellt.
-    ///
-    /// Die Übersicht enthält derzeit:
-    ///
-    /// - 68 Referenzlisten
-    /// - 1 integrierte Liste (PSBL)
-    /// - 67 noch nicht integrierte Listen
-    ///
-    /// Die Kennzahlen werden aus den tatsächlich
-    /// vorhandenen Monitoring-Ergebnissen berechnet.
-    ///
-    /// Spätere Erweiterungen um weitere Anbieter
-    /// benötigen keine Änderung des API-Vertrags.
+    /// Die Antwort enthält PSBL als bisheriges
+    /// Einzelresultat sowie die vollständige
+    /// dynamische Blacklist-Übersicht.
     /// </summary>
     private static IResult HandleReputation(
         HttpRequest request,
         IAdminApiKeyValidator apiKeyValidator,
         BlacklistMonitoringService monitoringService)
     {
-        /*
-         * Authentifizierung vor dem Zugriff
-         * auf die Monitoring-Daten.
-         */
         var providedApiKey =
             request.Headers[AdminApiKeyHeaderName]
                 .FirstOrDefault();
@@ -109,52 +95,13 @@ public static class AdminEndpoints
             return Results.Unauthorized();
         }
 
-        /*
-         * Atomar veröffentlichten Snapshot lesen.
-         *
-         * Der Snapshot enthält jetzt die
-         * vollständige Ergebnissammlung.
-         *
-         * Der API-Aufruf löst keine zusätzlichen
-         * externen Prüfungen aus.
-         */
         var snapshot =
             monitoringService.GetSnapshot();
 
-        /*
-         * Dynamische Blacklist-Übersicht.
-         *
-         * Die Ergebnissammlung kommt unmittelbar
-         * aus dem Monitoring-Snapshot.
-         *
-         * Es wird kein zusätzliches Dictionary
-         * mit nur einem PSBL-Ergebnis erzeugt.
-         *
-         * Dadurch können später mehrere
-         * Blacklist-Ergebnisse gleichzeitig
-         * in der Übersicht erscheinen.
-         */
         var overview =
             BlacklistOverviewFactory.Create(
                 snapshot.Results);
 
-        /*
-         * Rückwärtskompatibler API-Vertrag.
-         *
-         * Alle bisherigen Felder bleiben erhalten.
-         *
-         * Das Feld "result" liefert weiterhin
-         * das bestehende PSBL-Einzelprüfergebnis.
-         *
-         * Das Feld "overview" enthält die
-         * vollständige dynamische Übersicht
-         * aller Referenzlisten und der jeweils
-         * vorhandenen Monitoring-Ergebnisse.
-         *
-         * Die tatsächlichen Prüfergebnisse
-         * stammen ausschließlich aus dem
-         * serverseitigen Monitoring-Dienst.
-         */
         var response = new
         {
             snapshot.Hostname,
@@ -193,5 +140,50 @@ public static class AdminEndpoints
         };
 
         return Results.Ok(response);
+    }
+
+    /// <summary>
+    /// Startet eine neue Blacklist-Prüfung
+    /// nach erfolgreicher Authentifizierung.
+    ///
+    /// 204 = Prüfdurchlauf wurde abgeschlossen.
+    /// 401 = ungültiger Admin-Schlüssel.
+    /// 409 = ein Prüfdurchlauf läuft bereits.
+    /// 429 = Rate-Limit überschritten.
+    ///
+    /// 204 bedeutet nicht, dass alle Anbieter
+    /// ein eindeutiges Ergebnis geliefert haben.
+    /// Die Ergebnisse werden über GET gelesen.
+    /// </summary>
+    private static async Task<IResult>
+        HandleReputationCheckAsync(
+            HttpRequest request,
+            IAdminApiKeyValidator apiKeyValidator,
+            BlacklistMonitoringService monitoringService,
+            CancellationToken cancellationToken)
+    {
+        var providedApiKey =
+            request.Headers[AdminApiKeyHeaderName]
+                .FirstOrDefault();
+
+        if (!apiKeyValidator.IsValid(providedApiKey))
+        {
+            return Results.Unauthorized();
+        }
+
+        var wasExecuted =
+            await monitoringService.CheckNowAsync(
+                cancellationToken);
+
+        if (!wasExecuted)
+        {
+            return Results.Conflict(new
+            {
+                error =
+                    "Eine Blacklist-Prüfung läuft bereits."
+            });
+        }
+
+        return Results.NoContent();
     }
 }

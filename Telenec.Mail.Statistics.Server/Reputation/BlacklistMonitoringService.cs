@@ -3,12 +3,15 @@ using System.Collections.ObjectModel;
 using System.Net;
 using System.Net.Sockets;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(
+    "Telenec.Mail.Statistics.Tests")]
+
 namespace Telenec.Mail.Statistics.Server.Reputation;
 
 /// <summary>
 /// Atomar veröffentlichter Monitoring-Zustand.
 ///
-/// Result bleibt für die bestehende PSBL-API erhalten.
+/// Result bleibt für die bisherige PSBL-API erhalten.
 /// Results enthält die Ergebnisse aller registrierten
 /// Blacklist-Prüfer.
 /// </summary>
@@ -23,39 +26,53 @@ public sealed record BlacklistMonitoringSnapshot(
     public IReadOnlyDictionary<string, BlacklistCheckResult>
         Results
     { get; init; } =
-            new ReadOnlyDictionary<string, BlacklistCheckResult>(
-                new Dictionary<string, BlacklistCheckResult>(
-                    StringComparer.Ordinal));
+        new ReadOnlyDictionary<string, BlacklistCheckResult>(
+            new Dictionary<string, BlacklistCheckResult>(
+                StringComparer.Ordinal));
 }
 
 /// <summary>
-/// Serverseitiger Blacklist-Monitoring-Dienst.
+/// Serverseitiger, manuell ausgelöster
+/// Blacklist-Prüfdienst.
 ///
-/// Die Prüfungen erfolgen beim Serverstart und
-/// anschließend alle 15 Minuten.
+/// Beim Serverstart erfolgen keine DNSBL-Abfragen.
 ///
-/// Der Admin-API-Aufruf löst keine eigenen
-/// externen Blacklist-Abfragen aus.
+/// GetSnapshot liest nur den letzten Zustand.
+/// CheckNowAsync startet eine neue Prüfung.
 ///
-/// Alle Ergebnisse werden gemeinsam veröffentlicht.
+/// Gleichzeitige Prüfungen werden verhindert.
 /// </summary>
-public sealed class BlacklistMonitoringService : BackgroundService
+public sealed class BlacklistMonitoringService : IDisposable
 {
-    private static readonly TimeSpan CheckInterval =
-        TimeSpan.FromMinutes(15);
+    private readonly SemaphoreSlim _checkGate =
+        new(1, 1);
 
     private readonly TimeProvider _timeProvider;
 
-    private readonly ILogger<BlacklistMonitoringService> _logger;
+    private readonly ILogger<BlacklistMonitoringService>
+        _logger;
 
     private readonly BlacklistBatchRunner _batchRunner =
         new();
 
-    private readonly IReadOnlyCollection<BlacklistCheckJob> _jobs;
+    private readonly IReadOnlyCollection<BlacklistCheckJob>
+        _jobs;
 
     private readonly string _hostname;
 
     private readonly string _expectedIpv4;
+
+    /*
+     * Der normale Server verwendet RunCheckAsync.
+     *
+     * Für Regressionstests kann intern eine
+     * kontrollierte Prüfoperation eingesetzt werden.
+     *
+     * Damit testen wir echte Überlappungen
+     * ohne DNS-Anfragen.
+     */
+    private readonly Func<CancellationToken, Task>
+        _executeCheck;
 
     private BlacklistMonitoringSnapshot _snapshot;
 
@@ -67,6 +84,12 @@ public sealed class BlacklistMonitoringService : BackgroundService
         _timeProvider = timeProvider;
         _logger = logger;
 
+        /*
+         * Im Produktivbetrieb wird ausschließlich
+         * die reguläre Prüfoperation verwendet.
+         */
+        _executeCheck = RunCheckAsync;
+
         _hostname =
             configuration["Reputation:Hostname"]
             ?? "mail.necnet.de";
@@ -76,34 +99,15 @@ public sealed class BlacklistMonitoringService : BackgroundService
             ?? "80.79.237.70";
 
         /*
-         * Freigegebene aktive DNSBL-Profile:
-         *
-         * Erste Gruppe:
-         * - 0spam
-         * - 0spam RBL
-         * - DroneBL
-         * - UCEPROTECT Level 1
-         *
-         * Zweite Gruppe:
-         * - blocklist.de
-         * - UCEPROTECT Level 2
-         * - UCEPROTECT Level 3
+         * Freigegebene DNSBL-Anbieter.
          *
          * PSBL wird separat registriert.
          *
-         * Damit sind insgesamt acht
-         * Reputationslisten aktiv.
+         * Insgesamt acht aktive Prüfer.
          *
-         * DroneBL wurde nach erfolgreicher
-         * Positiv- und Negativkontrolle
-         * auf dem Ubuntu-Server freigegeben.
-         *
-         * SpamCop bleibt deaktiviert, bis die
-         * Nutzungsbedingungen für unseren
-         * Anwendungsfall abschließend geprüft sind.
-         *
-         * Andere Profile werden niemals
-         * automatisch aktiviert.
+         * SpamCop und alle weiteren Quellen
+         * bleiben bis zur ausdrücklichen
+         * Freigabe deaktiviert.
          */
 
         var approvedDnsblIds =
@@ -118,14 +122,6 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 "uceprotectl3"
             };
 
-        /*
-         * Beide vorbereiteten Anbietergruppen
-         * bilden den gemeinsamen Profilkatalog.
-         *
-         * Nur explizit freigegebene Kennungen
-         * gelangen in das produktive Monitoring.
-         */
-
         var approvedProfiles =
             DnsBlacklistProviderProfiles.FirstBatch
                 .Concat(
@@ -134,15 +130,6 @@ public sealed class BlacklistMonitoringService : BackgroundService
                     approvedDnsblIds.Contains(
                         profile.BlacklistId))
                 .ToArray();
-
-        /*
-         * Die Freigabeliste muss vollständig
-         * und ohne Duplikate umgesetzt sein.
-         *
-         * Fehlende oder doppelte Profile führen
-         * zu einem Startfehler statt zu einer
-         * stillschweigend unvollständigen Prüfung.
-         */
 
         var actualIds =
             approvedProfiles
@@ -158,11 +145,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
         }
 
         /*
-         * Jeder DNSBL-Checker besitzt ein
-         * eigenes, unveränderliches Anbieterprofil.
-         *
-         * Der Batch-Runner entscheidet über
-         * Parallelisierung und Zeitlimits.
+         * Jeder DNSBL-Checker erhält sein
+         * eigenes freigegebenes Anbieterprofil.
          */
 
         var dnsblJobs =
@@ -180,8 +164,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
 
         /*
          * PSBL bleibt an erster Stelle.
-         *
-         * Die bisherige PSBL-Implementierung
+         * Die bisherige Implementierung
          * wird nicht verändert.
          */
 
@@ -198,8 +181,9 @@ public sealed class BlacklistMonitoringService : BackgroundService
             .ToArray());
 
         /*
-         * Alle registrierten Anbieter erhalten
-         * zunächst den Status NotChecked.
+         * Kein Check beim Programmstart.
+         *
+         * Alle Prüfer beginnen mit NotChecked.
          */
 
         var initialResults =
@@ -224,46 +208,103 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Gibt den zuletzt veröffentlichten
-    /// Monitoring-Zustand zurück.
+    /// Interner Konstruktor für Regressionstests.
+    ///
+    /// Die simulierte Operation ersetzt nur
+    /// die eigentliche Prüfung.
+    ///
+    /// Die Synchronisierung in CheckNowAsync
+    /// bleibt vollständig dieselbe wie
+    /// im Produktivbetrieb.
+    ///
+    /// Dieser Konstruktor ist für die
+    /// Serveranwendung nicht öffentlich.
+    /// </summary>
+    internal BlacklistMonitoringService(
+        IConfiguration configuration,
+        TimeProvider timeProvider,
+        ILogger<BlacklistMonitoringService> logger,
+        Func<CancellationToken, Task> testCheck)
+        : this(configuration, timeProvider, logger)
+    {
+        _executeCheck =
+            testCheck
+            ?? throw new ArgumentNullException(
+                nameof(testCheck));
+    }
+
+    /// <summary>
+    /// Liest den letzten veröffentlichten Zustand.
+    ///
+    /// Führt niemals DNS-Abfragen durch.
     /// </summary>
     public BlacklistMonitoringSnapshot GetSnapshot()
     {
         return Volatile.Read(ref _snapshot);
     }
 
-    protected override async Task ExecuteAsync(
-        CancellationToken stoppingToken)
+    /// <summary>
+    /// Startet genau einen Prüfdurchlauf.
+    ///
+    /// true:
+    /// Die Prüfoperation wurde ausgeführt.
+    ///
+    /// false:
+    /// Eine andere Prüfoperation läuft bereits.
+    ///
+    /// Der fachliche Erfolg einzelner Anbieter
+    /// wird über den Snapshot bewertet.
+    /// </summary>
+    public async Task<bool> CheckNowAsync(
+        CancellationToken cancellationToken = default)
     {
+        /*
+         * Sofort ablehnen, wenn bereits
+         * eine Prüfung läuft.
+         *
+         * Es entsteht keine Warteschlange
+         * für weitere Prüfdurchläufe.
+         */
+
+        if (!await _checkGate.WaitAsync(
+                0,
+                cancellationToken))
+        {
+            return false;
+        }
+
         try
         {
-            await RunCheckAsync(stoppingToken);
+            /*
+             * Im Produktivbetrieb wird RunCheckAsync
+             * ausgeführt.
+             *
+             * Regressionstests können stattdessen
+             * eine kontrolliert blockierte Operation
+             * einsetzen.
+             */
+            await _executeCheck(cancellationToken);
 
-            using var timer = new PeriodicTimer(
-                CheckInterval,
-                _timeProvider);
-
-            while (await timer.WaitForNextTickAsync(
-                       stoppingToken))
-            {
-                await RunCheckAsync(stoppingToken);
-            }
+            return true;
         }
-        catch (OperationCanceledException)
-            when (stoppingToken.IsCancellationRequested)
+        finally
         {
-            // Reguläres Beenden des Dienstes.
+            /*
+             * Die Sperre wird auch nach einem
+             * Fehler oder Abbruch freigegeben.
+             */
+            _checkGate.Release();
         }
     }
 
     /// <summary>
-    /// Führt einen Monitoring-Durchlauf aus.
+    /// Führt einen vollständigen Prüfdurchlauf aus.
     ///
     /// Vor den Blacklist-Abfragen wird geprüft,
-    /// ob die konfigurierte Versand-IP zur
+    /// ob die erwartete Versand-IP zur
     /// DNS-Auflösung des Mailservers passt.
     ///
-    /// Erst danach startet der Batch-Runner.
+    /// Die Ergebnisse werden atomar veröffentlicht.
     /// </summary>
     private async Task RunCheckAsync(
         CancellationToken cancellationToken)
@@ -320,15 +361,11 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 else
                 {
                     /*
-                     * Ein gemeinsamer Batch für
-                     * alle acht Anbieter.
+                     * Gemeinsamer Batch für alle
+                     * acht freigegebenen Anbieter.
                      *
-                     * Jeder Anbieter liefert sein
-                     * eigenes Prüfergebnis.
-                     *
-                     * Fehler einzelner Anbieter
-                     * werden durch den Batch-Runner
-                     * isoliert behandelt.
+                     * Der Batch-Runner übernimmt
+                     * Parallelisierung und Zeitlimits.
                      */
 
                     results =
@@ -348,7 +385,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
         {
             _logger.LogWarning(
                 exception,
-                "Blacklist-Monitoring für {Hostname} fehlgeschlagen.",
+                "Blacklist-Prüfung für {Hostname} fehlgeschlagen.",
                 _hostname);
 
             results = CreateFailureResults(
@@ -359,19 +396,23 @@ public sealed class BlacklistMonitoringService : BackgroundService
         }
 
         /*
-         * Rückwärtskompatibilität:
+         * PSBL bleibt das rückwärtskompatible
+         * Einzelprüfergebnis.
          *
-         * Die bisherige Result-Eigenschaft
-         * bezeichnet weiterhin ausschließlich
-         * PSBL.
-         *
-         * Die Results-Sammlung enthält alle
-         * acht aktiven Anbieter.
+         * Results enthält alle Anbieter.
          */
 
         var psblResult = results["psbl"];
 
         var previousSnapshot = GetSnapshot();
+
+        /*
+         * Die bisherige Semantik bleibt vorläufig
+         * erhalten:
+         *
+         * LastSuccessfulCheckUtc bezeichnet
+         * weiterhin eine erfolgreiche PSBL-Prüfung.
+         */
 
         var lastSuccessfulCheckUtc =
             psblResult.IsConclusive
@@ -391,10 +432,6 @@ public sealed class BlacklistMonitoringService : BackgroundService
                 Results = results
             };
 
-        /*
-         * Atomare Veröffentlichung.
-         */
-
         Volatile.Write(
             ref _snapshot,
             newSnapshot);
@@ -413,7 +450,7 @@ public sealed class BlacklistMonitoringService : BackgroundService
             results.Count - listedCount - notListedCount;
 
         _logger.LogInformation(
-            "Blacklist-Monitoring abgeschlossen. " +
+            "Manuelle Blacklist-Prüfung abgeschlossen. " +
             "Host: {Hostname}, IP: {IpAddress}, " +
             "Anbieter: {ProviderCount}, " +
             "Nicht gelistet: {NotListedCount}, " +
@@ -428,11 +465,10 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Erstellt Fehlerergebnisse für alle
-    /// registrierten Anbieter.
+    /// Erstellt Fehlerergebnisse für alle Prüfer.
     ///
-    /// Eine fehlgeschlagene Vorprüfung
-    /// darf niemals als NotListed erscheinen.
+    /// Eine fehlgeschlagene Vorprüfung darf
+    /// niemals als NotListed erscheinen.
     /// </summary>
     private IReadOnlyDictionary<string, BlacklistCheckResult>
         CreateFailureResults(
@@ -452,8 +488,8 @@ public sealed class BlacklistMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Erstellt eine schreibgeschützte
-    /// Sammlung mit eindeutigen Kennungen.
+    /// Erstellt eine schreibgeschützte Sammlung
+    /// mit eindeutigen Anbieterkennungen.
     /// </summary>
     private static IReadOnlyDictionary<string, BlacklistCheckResult>
         CreateResultCollection(
@@ -491,5 +527,10 @@ public sealed class BlacklistMonitoringService : BackgroundService
         return new ReadOnlyDictionary<
             string,
             BlacklistCheckResult>(dictionary);
+    }
+
+    public void Dispose()
+    {
+        _checkGate.Dispose();
     }
 }

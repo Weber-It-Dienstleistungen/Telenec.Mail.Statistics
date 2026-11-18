@@ -1,0 +1,44 @@
+
+[Unit]
+Description=Telenec Mail Statistics - Automatischer Server-Updater
+Documentation=man:systemd.service(5)
+ConditionPathExists=/usr/local/sbin/telenec-statistics-update-check.py
+ConditionPathExists=/etc/telenec-mail-statistics-updater/allowed_signers
+ConditionPathExists=/var/lib/telenec-mail-statistics-updater/installed-version
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/var/lib/telenec-mail-statistics-updater
+
+ExecStart=/usr/bin/python3 /usr/local/sbin/telenec-statistics-update-check.py --apply
+
+UMask=0077
+TimeoutStartSec=30min
+Restart=no
+
+# Der Updater muss den Statistikdienst verwalten und seine
+# Anwendungsdateien sowie die SQLite-Datenbank sichern können.
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+ReadWritePaths=/opt
+ReadWritePaths=/var/lib/telenec-mail-statistics
+ReadWritePaths=/var/lib/telenec-mail-statistics-updater
+
+# Zusätzliche Einschränkungen für den Updateprozess.
+
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+StandardOutput=journal
+StandardError=journal

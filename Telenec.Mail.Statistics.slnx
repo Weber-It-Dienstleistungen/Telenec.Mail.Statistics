@@ -1,5 +1,11 @@
 <Solution>
   <Folder Name="/Projektmappenelemente/" />
+  <Folder Name="/tools/">
+    <File Path="telenec-mail-statistics-updater.service" />
+    <File Path="telenec-mail-statistics-updater.timer" />
+    <File Path="tools/Build-StatisticsServerRelease.ps1" />
+    <File Path="tools/telenec-statistics-update-check.py" />
+  </Folder>
   <Project Path="Telenec.Mail.Statistics.Admin/Telenec.Mail.Statistics.Admin.csproj" />
   <Project Path="Telenec.Mail.Statistics.Server/Telenec.Mail.Statistics.Server.csproj" />
   <Project Path="Telenec.Mail.Statistics.Tests/Telenec.Mail.Statistics.Tests.csproj" Id="697218e4-3ab8-4232-8c1f-575636911df8" />

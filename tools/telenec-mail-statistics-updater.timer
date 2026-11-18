@@ -1,0 +1,14 @@
+
+[Unit]
+Description=Telenec Mail Statistics - Updatepruefung alle 15 Minuten
+Documentation=man:systemd.timer(5)
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00
+OnBootSec=2min
+AccuracySec=1min
+Persistent=true
+Unit=telenec-mail-statistics-updater.service
+
+[Install]
+WantedBy=timers.target

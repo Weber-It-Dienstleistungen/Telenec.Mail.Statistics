@@ -7,6 +7,7 @@
     <File Path="tools/telenec-statistics-update-check.py" />
   </Folder>
   <Project Path="Telenec.Mail.Statistics.Admin/Telenec.Mail.Statistics.Admin.csproj" />
+  <Project Path="Telenec.Mail.Statistics.Reputation.Tests/Telenec.Mail.Statistics.Reputation.Tests.csproj" Id="a66c6974-7f9c-4efe-bd61-2d89c31df204" />
   <Project Path="Telenec.Mail.Statistics.Server/Telenec.Mail.Statistics.Server.csproj" />
   <Project Path="Telenec.Mail.Statistics.Tests/Telenec.Mail.Statistics.Tests.csproj" Id="697218e4-3ab8-4232-8c1f-575636911df8" />
 </Solution>

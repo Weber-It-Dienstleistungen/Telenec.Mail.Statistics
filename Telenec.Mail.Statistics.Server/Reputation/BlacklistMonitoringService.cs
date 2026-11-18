@@ -52,8 +52,19 @@ public sealed class BlacklistMonitoringService : IDisposable
     private readonly ILogger<BlacklistMonitoringService>
         _logger;
 
+    /*
+     * Die erweiterte Anbietergruppe benötigt
+     * gegebenenfalls mehrere Ausführungswellen.
+     *
+     * Der Batch-Runner begrenzt weiterhin
+     * die tatsächliche Parallelität.
+     *
+     * Das größere Zeitbudget verhindert,
+     * dass regulär wartende Anbieter zu früh
+     * als fehlgeschlagen bewertet werden.
+     */
     private readonly BlacklistBatchRunner _batchRunner =
-        new();
+        new(TimeSpan.FromSeconds(45));
 
     private readonly IReadOnlyCollection<BlacklistCheckJob>
         _jobs;
@@ -81,6 +92,10 @@ public sealed class BlacklistMonitoringService : IDisposable
         TimeProvider timeProvider,
         ILogger<BlacklistMonitoringService> logger)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(logger);
+
         _timeProvider = timeProvider;
         _logger = logger;
 
@@ -99,17 +114,13 @@ public sealed class BlacklistMonitoringService : IDisposable
             ?? "80.79.237.70";
 
         /*
-         * Freigegebene DNSBL-Anbieter.
+         * Bestehende freigegebene DNSBL-Anbieter.
          *
-         * PSBL wird separat registriert.
+         * PSBL wird weiterhin separat registriert.
          *
-         * Insgesamt acht aktive Prüfer.
-         *
-         * SpamCop und alle weiteren Quellen
-         * bleiben bis zur ausdrücklichen
-         * Freigabe deaktiviert.
+         * Diese sieben Registrierungen bleiben
+         * unverändert bestehen.
          */
-
         var approvedDnsblIds =
             new HashSet<string>(StringComparer.Ordinal)
             {
@@ -122,7 +133,17 @@ public sealed class BlacklistMonitoringService : IDisposable
                 "uceprotectl3"
             };
 
-        var approvedProfiles =
+        /*
+         * Bereits vorhandene Anbieterprofile.
+         *
+         * Nur die bisher tatsächlich aktiven
+         * Profile werden aus FirstBatch und
+         * SecondBatch übernommen.
+         *
+         * Dadurch wird SpamCop nicht doppelt
+         * registriert.
+         */
+        var existingProfiles =
             DnsBlacklistProviderProfiles.FirstBatch
                 .Concat(
                     DnsBlacklistProviderProfiles.SecondBatch)
@@ -131,26 +152,154 @@ public sealed class BlacklistMonitoringService : IDisposable
                         profile.BlacklistId))
                 .ToArray();
 
-        var actualIds =
-            approvedProfiles
+        var existingIds =
+            existingProfiles
                 .Select(profile => profile.BlacklistId)
                 .ToHashSet(StringComparer.Ordinal);
 
-        if (approvedProfiles.Length != approvedDnsblIds.Count
-            || !actualIds.SetEquals(approvedDnsblIds))
+        if (existingProfiles.Length != approvedDnsblIds.Count
+            || !existingIds.SetEquals(approvedDnsblIds))
         {
             throw new InvalidOperationException(
-                "Die freigegebene DNSBL-Anbietergruppe " +
+                "Die bisher freigegebene DNSBL-Anbietergruppe " +
                 "ist unvollständig oder enthält Duplikate.");
         }
 
         /*
-         * Jeder DNSBL-Checker erhält sein
-         * eigenes freigegebenes Anbieterprofil.
+         * Zusätzliche öffentliche DNSBL-Kandidaten.
+         *
+         * Standardmäßig deaktiviert, wenn keine
+         * Einstellung vorhanden ist.
+         *
+         * Der bestehende Regressionstest mit
+         * seiner In-Memory-Konfiguration behält
+         * damit die bisherige Acht-Anbieter-Gruppe.
          */
+        var enableExtendedDnsbl =
+            configuration.GetValue<bool>(
+                "Reputation:EnableExtendedDnsbl");
 
+        /*
+         * Weitere Kandidaten mit noch offener
+         * technischer oder lizenzrechtlicher
+         * Prüfung.
+         *
+         * Sie benötigen eine eigene ausdrückliche
+         * Aktivierung über die Konfiguration.
+         */
+        var enableReviewDnsbl =
+            configuration.GetValue<bool>(
+                "Reputation:EnableReviewDnsbl");
+
+        /*
+         * Die zweite Gruppe darf nicht versehentlich
+         * allein ohne die normale Erweiterung
+         * eingeschaltet werden.
+         */
+        if (enableReviewDnsbl
+            && !enableExtendedDnsbl)
+        {
+            throw new InvalidOperationException(
+                "Reputation:EnableReviewDnsbl erfordert " +
+                "Reputation:EnableExtendedDnsbl.");
+        }
+
+        /*
+         * Alle tatsächlich freigegebenen Profile
+         * in einer gemeinsamen Sammlung aufbauen.
+         *
+         * Kein DNS-Zugriff erfolgt bei diesem Schritt.
+         */
+        var selectedProfiles =
+            new List<DnsBlacklistProfile>(
+                existingProfiles);
+
+        if (enableExtendedDnsbl)
+        {
+            selectedProfiles.AddRange(
+                ExtendedDnsBlacklistProviderProfiles
+                    .PublicDnsblProfiles);
+        }
+
+        if (enableReviewDnsbl)
+        {
+            selectedProfiles.AddRange(
+                ExtendedDnsBlacklistProviderProfiles
+                    .ReviewDnsblProfiles);
+        }
+
+        /*
+         * Vor Registrierung prüfen, dass jeder
+         * Anbieter eindeutig ist und tatsächlich
+         * im Referenzkatalog existiert.
+         */
+        var knownIds =
+            BlacklistCatalog.Entries
+                .Select(entry => entry.Id)
+                .ToHashSet(StringComparer.Ordinal);
+
+        var actualIds =
+            selectedProfiles
+                .Select(profile => profile.BlacklistId)
+                .ToArray();
+
+        if (actualIds.Length
+            != actualIds.Distinct(
+                StringComparer.Ordinal).Count())
+        {
+            throw new InvalidOperationException(
+                "Die DNSBL-Erweiterung enthält " +
+                "doppelte Anbieterkennungen.");
+        }
+
+        var unknownIds =
+            actualIds
+                .Where(id => !knownIds.Contains(id))
+                .ToArray();
+
+        if (unknownIds.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "Unbekannte DNSBL-Anbieter: " +
+                string.Join(", ", unknownIds));
+        }
+
+        /*
+         * Die beiden Erweiterungsgruppen besitzen
+         * feste, überprüfbare Größen.
+         *
+         * Diese Prüfung erkennt versehentlich
+         * fehlende oder doppelt hinzugefügte Profile
+         * bereits beim Serverstart.
+         */
+        var expectedProviderCount =
+            approvedDnsblIds.Count
+            + (enableExtendedDnsbl
+                ? ExtendedDnsBlacklistProviderProfiles
+                    .PublicDnsblProfiles.Count
+                : 0)
+            + (enableReviewDnsbl
+                ? ExtendedDnsBlacklistProviderProfiles
+                    .ReviewDnsblProfiles.Count
+                : 0);
+
+        if (selectedProfiles.Count != expectedProviderCount)
+        {
+            throw new InvalidOperationException(
+                "Die konfigurierte DNSBL-Anbietergruppe " +
+                "ist unvollständig.");
+        }
+
+        /*
+         * Jeder DNSBL-Checker erhält sein
+         * eigenes Anbieterprofil.
+         *
+         * Der Konstruktor validiert unter anderem
+         * die DNS-Zone, Kontrolladressen und
+         * Rückgabecodes.
+         */
         var dnsblJobs =
-            approvedProfiles
+            selectedProfiles
                 .Select(profile =>
                 {
                     var checker =
@@ -164,10 +313,10 @@ public sealed class BlacklistMonitoringService : IDisposable
 
         /*
          * PSBL bleibt an erster Stelle.
+         *
          * Die bisherige Implementierung
          * wird nicht verändert.
          */
-
         var psblChecker = new PsblBlacklistChecker();
 
         _jobs = Array.AsReadOnly(
@@ -185,7 +334,6 @@ public sealed class BlacklistMonitoringService : IDisposable
          *
          * Alle Prüfer beginnen mit NotChecked.
          */
-
         var initialResults =
             CreateResultCollection(
                 _jobs.Select(job => new BlacklistCheckResult
@@ -205,6 +353,15 @@ public sealed class BlacklistMonitoringService : IDisposable
         {
             Results = initialResults
         };
+
+        _logger.LogInformation(
+            "Blacklist-Monitoring initialisiert. " +
+            "Registrierte Prüfer: {ProviderCount}. " +
+            "Öffentliche Erweiterung: {ExtendedEnabled}. " +
+            "Zusätzliche Prüfgruppe: {ReviewEnabled}.",
+            _jobs.Count,
+            enableExtendedDnsbl,
+            enableReviewDnsbl);
     }
 
     /// <summary>
@@ -265,7 +422,6 @@ public sealed class BlacklistMonitoringService : IDisposable
          * Es entsteht keine Warteschlange
          * für weitere Prüfdurchläufe.
          */
-
         if (!await _checkGate.WaitAsync(
                 0,
                 cancellationToken))
@@ -362,12 +518,11 @@ public sealed class BlacklistMonitoringService : IDisposable
                 {
                     /*
                      * Gemeinsamer Batch für alle
-                     * acht freigegebenen Anbieter.
+                     * registrierten Anbieter.
                      *
                      * Der Batch-Runner übernimmt
                      * Parallelisierung und Zeitlimits.
                      */
-
                     results =
                         await _batchRunner.RunAsync(
                             _jobs,
@@ -401,7 +556,6 @@ public sealed class BlacklistMonitoringService : IDisposable
          *
          * Results enthält alle Anbieter.
          */
-
         var psblResult = results["psbl"];
 
         var previousSnapshot = GetSnapshot();
@@ -413,7 +567,6 @@ public sealed class BlacklistMonitoringService : IDisposable
          * LastSuccessfulCheckUtc bezeichnet
          * weiterhin eine erfolgreiche PSBL-Prüfung.
          */
-
         var lastSuccessfulCheckUtc =
             psblResult.IsConclusive
                 ? psblResult.CompletedAtUtc

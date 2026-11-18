@@ -12,6 +12,13 @@ namespace Telenec.Mail.Statistics.Server.Reputation;
 /// Antwortcodes, Kontrolladressen und
 /// Anbieterbedingungen geprüft wurden.
 ///
+/// PositiveControlAdditionalReturnCodes:
+/// Zusätzliche Codes, die ausschließlich bei
+/// der positiven Kontrollabfrage erlaubt sind.
+///
+/// Diese Codes werden ausdrücklich NICHT
+/// als echte Blacklist-Listungen gewertet.
+///
 /// Die Definition allein aktiviert keine Abfrage.
 /// </summary>
 public sealed record DnsBlacklistProfile(
@@ -20,7 +27,9 @@ public sealed record DnsBlacklistProfile(
     IReadOnlyCollection<string> ListedReturnCodes,
     IReadOnlyCollection<string> AccessDeniedReturnCodes,
     string PositiveControlAddress,
-    string NegativeControlAddress);
+    string NegativeControlAddress,
+    IReadOnlyCollection<string>?
+        PositiveControlAdditionalReturnCodes = null);
 
 /// <summary>
 /// Ergebnis einer einzelnen DNS-A-Abfrage.
@@ -35,7 +44,7 @@ public sealed record DnsBlacklistDnsResponse(
 /// <summary>
 /// Austauschbare DNS-Schnittstelle.
 ///
-/// Dadurch können wir die Prüfengine später
+/// Dadurch können wir die Prüfengine
 /// mit simulierten DNS-Antworten testen,
 /// ohne echte Blacklist-Anbieter abzufragen.
 /// </summary>
@@ -48,7 +57,13 @@ public interface IDnsBlacklistResolver
 
 /// <summary>
 /// Produktiver DNS-Resolver auf Basis
-/// der Windows-/System-DNS-Auflösung.
+/// der System-DNS-Auflösung.
+///
+/// Nur HostNotFound wird als NXDOMAIN
+/// interpretiert.
+///
+/// NoData und andere DNS-Fehler bleiben
+/// ausdrücklich technische Fehler.
 /// </summary>
 public sealed class SystemDnsBlacklistResolver
     : IDnsBlacklistResolver
@@ -84,14 +99,15 @@ public sealed class SystemDnsBlacklistResolver
 /// Gemeinsame Prüfengine für IPv4-DNSBLs
 /// mit positiven und negativen Kontrollabfragen.
 ///
-/// Der konkrete Anbieter wird über ein
-/// geprüftes DNSBL-Profil beschrieben.
+/// Die positive Kontrollabfrage darf
+/// anbieterabhängig zusätzliche, bekannte
+/// Kontrollcodes liefern.
 ///
-/// Der Checker nimmt keine Änderungen
-/// an Mailservern oder DNS-Konfigurationen vor.
+/// Diese zusätzlichen Kontrollcodes werden
+/// niemals automatisch als Listung bewertet.
 ///
-/// Er führt nur bei ausdrücklichem Aufruf
-/// von CheckAsync DNS-Anfragen durch.
+/// Der Checker führt nur auf ausdrücklichen
+/// Aufruf von CheckAsync DNS-Abfragen durch.
 /// </summary>
 public sealed class DnsBlacklistChecker
 {
@@ -106,6 +122,7 @@ public sealed class DnsBlacklistChecker
 
     private readonly HashSet<IPAddress> _listedCodes;
     private readonly HashSet<IPAddress> _accessDeniedCodes;
+    private readonly HashSet<IPAddress> _positiveControlCodes;
 
     private readonly IDnsBlacklistResolver _resolver;
 
@@ -163,12 +180,22 @@ public sealed class DnsBlacklistChecker
                 nameof(profile));
         }
 
+        /*
+         * Echte Listungscodes.
+         *
+         * Nur diese Codes dürfen bei einer
+         * tatsächlichen Zielprüfung zu Listed führen.
+         */
         _listedCodes =
             ParseReturnCodes(
                 profile.ListedReturnCodes,
                 "Listungscodes",
                 requireNonEmpty: true);
 
+        /*
+         * Zugriffssperren werden getrennt
+         * von tatsächlichen Listungen bewertet.
+         */
         _accessDeniedCodes =
             ParseReturnCodes(
                 profile.AccessDeniedReturnCodes,
@@ -182,6 +209,63 @@ public sealed class DnsBlacklistChecker
                 "Listungscodes und Zugriffssperrcodes " +
                 "dürfen sich nicht überschneiden.",
                 nameof(profile));
+        }
+
+        /*
+         * Positive Kontrollabfragen dürfen
+         * grundsätzlich alle echten Listungscodes
+         * enthalten.
+         *
+         * Standardverhalten aller bisherigen
+         * Anbieter bleibt damit unverändert.
+         */
+        _positiveControlCodes =
+            new HashSet<IPAddress>(_listedCodes);
+
+        /*
+         * Manche Anbieter liefern bei der
+         * Testadresse zusätzliche bekannte
+         * Reputationscodes.
+         *
+         * Beispiel Mailspike:
+         * 127.0.0.13 steht für L2.
+         *
+         * Dieser Code darf eine positive
+         * Kontrollabfrage nicht ungültig machen.
+         *
+         * Er ist aber kein automatisch
+         * freigegebener Listungscode.
+         */
+        if (profile.PositiveControlAdditionalReturnCodes
+            is not null)
+        {
+            var additionalCodes =
+                ParseReturnCodes(
+                    profile.PositiveControlAdditionalReturnCodes,
+                    "zusätzliche positive Kontrollcodes",
+                    requireNonEmpty: false);
+
+            if (additionalCodes.Overlaps(
+                    _listedCodes))
+            {
+                throw new ArgumentException(
+                    "Zusätzliche Kontrollcodes dürfen " +
+                    "keine bereits definierten " +
+                    "Listungscodes wiederholen.",
+                    nameof(profile));
+            }
+
+            if (additionalCodes.Overlaps(
+                    _accessDeniedCodes))
+            {
+                throw new ArgumentException(
+                    "Zusätzliche Kontrollcodes dürfen " +
+                    "keine Zugriffssperrcodes enthalten.",
+                    nameof(profile));
+            }
+
+            _positiveControlCodes.UnionWith(
+                additionalCodes);
         }
 
         _resolver =
@@ -240,14 +324,18 @@ public sealed class DnsBlacklistChecker
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // 1. Positive Kontrollabfrage.
-            //
-            // Die konfigurierte Testadresse muss
-            // einen erwarteten Listungscode liefern.
-            //
-            // Damit erkennen wir beispielsweise
-            // falsche Zonen und DNS-Probleme.
-
+            /*
+             * 1. Positive Kontrollabfrage.
+             *
+             * Mindestens ein echter Listungscode
+             * muss vorhanden sein.
+             *
+             * Alle übrigen Antworten müssen
+             * ausdrücklich als zulässige
+             * Kontrollcodes bekannt sein.
+             *
+             * Unbekannte Antworten bleiben Fehler.
+             */
             var positiveQuery =
                 BuildQueryName(
                     _positiveControlAddress,
@@ -273,7 +361,9 @@ public sealed class DnsBlacklistChecker
                 || !positiveResponse.Addresses.Any(
                     _listedCodes.Contains)
                 || positiveResponse.Addresses.Any(
-                    address => !_listedCodes.Contains(address)))
+                    address =>
+                        !_positiveControlCodes.Contains(
+                            address)))
             {
                 return CreateResult(
                     BlacklistCheckStatus.Failed,
@@ -282,14 +372,15 @@ public sealed class DnsBlacklistChecker
                         "lieferte kein gültiges Ergebnis.");
             }
 
-            // 2. Negative Kontrollabfrage.
-            //
-            // Die konfigurierte Negativadresse
-            // muss NXDOMAIN liefern.
-            //
-            // Andernfalls ist eine zuverlässige
-            // Negativbewertung nicht möglich.
-
+            /*
+             * 2. Negative Kontrollabfrage.
+             *
+             * Die konfigurierte Negativadresse
+             * muss NXDOMAIN liefern.
+             *
+             * Andernfalls ist eine zuverlässige
+             * Negativbewertung nicht möglich.
+             */
             var negativeQuery =
                 BuildQueryName(
                     _negativeControlAddress,
@@ -319,12 +410,13 @@ public sealed class DnsBlacklistChecker
                         "lieferte kein NXDOMAIN.");
             }
 
-            // 3. Tatsächliche Blacklist-Prüfung.
-            //
-            // Erst nach erfolgreichen
-            // Kontrollabfragen wird das
-            // eigentliche Prüfziel abgefragt.
-
+            /*
+             * 3. Tatsächliche Zielprüfung.
+             *
+             * Erst nach beiden erfolgreichen
+             * Kontrollabfragen wird die
+             * eigentliche Versand-IP abgefragt.
+             */
             var targetQuery =
                 BuildQueryName(
                     targetAddress,
@@ -349,10 +441,12 @@ public sealed class DnsBlacklistChecker
                         .Select(
                             address => address.ToString()));
 
-            // Zugriffssperren haben Vorrang.
-            // Sie dürfen niemals als
-            // bestätigte Listung gelten.
-
+            /*
+             * Zugriffssperren haben Vorrang.
+             *
+             * Sie dürfen niemals als
+             * bestätigte Listung gelten.
+             */
             if (ContainsAccessDeniedCode(
                     targetResponse))
             {
@@ -364,9 +458,13 @@ public sealed class DnsBlacklistChecker
                         "einen nicht erlaubten Zugriff.");
             }
 
-            // Nur vollständig bekannte
-            // Listungscodes sind eindeutig.
-
+            /*
+             * Ausschließlich echte, freigegebene
+             * Listungscodes dürfen Listed ergeben.
+             *
+             * Zusätzliche Kontrollcodes sind
+             * hier ausdrücklich NICHT gültig.
+             */
             if (targetResponse.Addresses.Count > 0
                 && targetResponse.Addresses.All(
                     _listedCodes.Contains))
@@ -376,15 +474,21 @@ public sealed class DnsBlacklistChecker
                     providerResponse: responseText);
             }
 
-            // Keine unbekannten Antworten
-            // als negativ oder positiv werten.
-
+            /*
+             * Eine andere bekannte Reputationsstufe
+             * ist nicht automatisch eine Listung.
+             *
+             * Unbekannte oder gemischte Antworten
+             * werden nicht als NotListed oder
+             * Listed ausgegeben.
+             */
             return CreateResult(
                 BlacklistCheckStatus.Unknown,
                 providerResponse: responseText,
                 errorMessage:
                     "Der Anbieter lieferte unbekannte " +
-                    "oder widersprüchliche DNS-Antworten.");
+                    "oder für eine Blacklist-Listung " +
+                    "nicht eindeutige DNS-Antworten.");
         }
         catch (OperationCanceledException)
             when (!cancellationToken.IsCancellationRequested)
@@ -397,9 +501,10 @@ public sealed class DnsBlacklistChecker
         }
         catch (OperationCanceledException)
         {
-            // Ein ausdrücklicher Abbruch durch
-            // den aufrufenden Dienst bleibt erhalten.
-
+            /*
+             * Ein ausdrücklicher Abbruch durch
+             * den aufrufenden Dienst bleibt erhalten.
+             */
             throw;
         }
         catch (SocketException exception)
@@ -431,9 +536,7 @@ public sealed class DnsBlacklistChecker
     /// Erzeugt den DNSBL-Abfragenamen
     /// aus einer umgekehrten IPv4-Adresse.
     ///
-    /// Beispiel:
-    /// 192.0.2.10
-    /// wird zu:
+    /// 192.0.2.10 wird zu:
     /// 10.2.0.192.example.test
     /// </summary>
     private static string BuildQueryName(
@@ -480,21 +583,21 @@ public sealed class DnsBlacklistChecker
                 $"Es wurden keine {description} angegeben.");
         }
 
-        var parsedCodes = new HashSet<IPAddress>();
+        var parsedCodes =
+            new HashSet<IPAddress>();
 
         foreach (var code in codes)
         {
-            var address = ParseIpv4(
-                code,
-                description);
+            var address =
+                ParseIpv4(
+                    code,
+                    description);
 
-            // Bei dieser Engine sind nur
-            // klassische DNSBL-Rückgabecodes
-            // aus 127.0.0.0/8 zugelassen.
-            //
-            // Andere Anbieterformate benötigen
-            // eine gesonderte Auswertung.
-
+            /*
+             * Nur klassische DNSBL-Rückgabecodes
+             * aus dem Bereich 127.0.0.0/8
+             * sind in dieser Engine zulässig.
+             */
             if (address.GetAddressBytes()[0] != 127)
             {
                 throw new ArgumentException(
@@ -513,12 +616,10 @@ public sealed class DnsBlacklistChecker
     }
 
     /// <summary>
-    /// Einfache strukturelle Prüfung einer
-    /// konfigurierten DNS-Zone.
+    /// Strukturelle Prüfung einer DNS-Zone.
     ///
-    /// Die Prüfung bestätigt ausdrücklich
-    /// nicht die rechtliche oder technische
-    /// Freigabe durch einen Anbieter.
+    /// Dies bestätigt ausdrücklich keine
+    /// Zugangsberechtigung oder Erreichbarkeit.
     /// </summary>
     private static bool IsValidDnsZone(
         string dnsZone)
@@ -529,7 +630,8 @@ public sealed class DnsBlacklistChecker
             return false;
         }
 
-        var labels = dnsZone.Split('.');
+        var labels =
+            dnsZone.Split('.');
 
         if (labels.Length < 2)
         {

@@ -81,9 +81,57 @@ Ablehnungen, sowie die einzelne Accountstatistik in einer Detailansicht.
 Die Auswahl eines Accounts zeigt dessen von Plesk gelieferte
 Zeitwerte. Keine Sperrbuttons im Sprint 38.
 
+### Sprint 39: automatische Snapshot-Erneuerung (bereit zur Serverinstallation)
+
+Zwei voneinander unabhaengige systemd-Oneshot-Dienste plus Timer
+erneuern die Dateien alle fuenf Minuten:
+
+- `telenec-mail-security-snapshot.service/.timer` ruft die Plesk-CLI
+  ueber den vorhandenen Security-Collector auf und schreibt nur eine
+  geschuetzte Datei `mail-security-preview.json` mit Postfach-Statistiken.
+  Datei: `telenecstats:telenecstats`, Modus `0600`.
+- `telenec-mail-traffic-snapshot.service/.timer` liest die Postfix-Logs
+  und schreibt `mail-traffic-preview.json` **ohne** Top-3-Accountnamen
+  und -Zaehler. Datei: `root:telenecstats`, Modus `0640`.
+  Die Option `--omit-account-rankings` ist fuer den automatischen
+  Collector zwingend. Die 24 Stundenbalken bleiben erhalten.
+
+Die Dienste laufen mit Root-Rechten, weil die Plesk-Systemschnittstelle
+und Postfix-Protokolle privilegierten Zugriff benoetigen. Sie rufen
+ausschliesslich feste, lesende Kommandos auf; ihre einzige Schreibwirkung
+ist das atomare Ersetzen von Snapshot-Dateien.
+
+Installation nach bewusstem Download beider Skripte unter `/root`:
+
+```bash
+bash /root/Install-MailSnapshotTimers.sh
+```
+
+Der Installer prueft die vorhandenen Quelldateien und den Dienstnutzer,
+kopiert die Skripte root-owned unter `/usr/local/libexec/`,
+legt systemd-Units an und startet beide Collector-Dienste einmalig.
+Nur wenn beide erfolgreich waren, aktiviert er die Timer. Keine
+Neuveroeffentlichung der .NET-Serveranwendung erforderlich.
+
+Status und Logs:
+
+```bash
+systemctl list-timers --all --no-pager | grep 'telenec-mail-.*-snapshot'
+journalctl -u telenec-mail-security-snapshot.service -n 30 --no-pager
+journalctl -u telenec-mail-traffic-snapshot.service -n 30 --no-pager
+```
+
+Die Admin-GUI liest weiter nur Snapshots; sie sendet keine Befehle an
+Plesk oder die Collector-Dienste. Der Klick auf `Aktualisieren` laedt
+die aktuellen Dateien vom Statistikserver.
+
+Bei Fehlschlag bleibt die letzte gute Datei stehen. Nach 15 Minuten
+kennzeichnen beide Server-Reader deren Inhalt als veraltet, statt
+den Eindruck frischer Messdaten zu erwecken.
+
 ### Noch NICHT implementiert
 
-- Dauerhaft laufender Collector / Aktualisierungstimer
+- Historisierung ueber die momentanen Snapshot-Zeitreihen hinaus
 - Langzeit-Historisierung und Trendanalyse der Plesk-Accountdaten
 - Persönliche Administrator-Authentifizierung, Rollen und Audit-Log
 - Steuernder Plesk-Agent, manuelle Versandlimits und Entsperrung

@@ -118,9 +118,12 @@ public sealed class MailTrafficSnapshotReader
 
             var age = now - snapshot.GeneratedAtUtc;
             var windowAge = now - snapshot.WindowEndUtc;
+            // Das Ende des 24. Stundenblocks darf in der Zukunft
+            // liegen: Er ist die laufende, noch unvollständige Stunde.
+            // Der Snapshot selbst muss dennoch frisch sein.
             if (age < TimeSpan.FromMinutes(-2)
                 || age > MaximumAge
-                || windowAge < TimeSpan.FromMinutes(-2)
+                || windowAge < -TimeSpan.FromMinutes(62)
                 || windowAge > MaximumAge)
             {
                 return Unavailable(

@@ -21,16 +21,25 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
     private const string AdminApiKeyHeaderName =
         "X-Admin-Key";
 
+    // Eigener HTTP-Client nur für den manuellen DNSBL-Prüfdurchlauf.
+    // Die lesenden API-Aufrufe behalten ihren kurzen Timeout.
+    internal const string BlacklistCheckClientName =
+        "TelenecMailStatisticsBlacklistCheck";
+
     private readonly HttpClient _httpClient;
+    private readonly HttpClient _blacklistCheckHttpClient;
     private readonly IAdminApiKeyProvider _apiKeyProvider;
     private readonly IAdminApiBaseUrlProvider _baseUrlProvider;
 
     public AdminStatisticsClient(
         HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         IAdminApiKeyProvider apiKeyProvider,
         IAdminApiBaseUrlProvider baseUrlProvider)
     {
         _httpClient = httpClient;
+        _blacklistCheckHttpClient =
+            httpClientFactory.CreateClient(BlacklistCheckClientName);
         _apiKeyProvider = apiKeyProvider;
         _baseUrlProvider = baseUrlProvider;
     }
@@ -287,7 +296,7 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
             apiKey);
 
         using var response =
-            await _httpClient.SendAsync(
+            await _blacklistCheckHttpClient.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken);

@@ -48,6 +48,19 @@ public partial class App : Application
                             TimeSpan.FromSeconds(10);
                     });
 
+                /*
+                 * Der manuelle Blacklist-Check wartet bis zu 180 Sekunden.
+                 * Die regulären Dashboard- und Reputationsabfragen
+                 * behalten ihren bisherigen Timeout von 10 Sekunden.
+                 */
+                services.AddHttpClient(
+                    AdminStatisticsClient.BlacklistCheckClientName,
+                    httpClient =>
+                    {
+                        httpClient.Timeout =
+                            TimeSpan.FromSeconds(180);
+                    });
+
                 services.AddHttpClient<
                     IAdminConnectionSetupService,
                     AdminConnectionSetupService>(

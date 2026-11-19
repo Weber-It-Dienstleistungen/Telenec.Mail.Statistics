@@ -1561,6 +1561,232 @@
                 </ScrollViewer>
             </TabItem>
 
+
+            <!-- Mail-Sicherheit: Plesk Outgoing Mail Control, nur lesend -->
+            <TabItem Header="Mail-Sicherheit"
+                     Padding="18,9">
+
+                <Grid Margin="12,16,12,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+                        <TextBlock Text="Mail-Sicherheit"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryTextBrush}" />
+
+                        <TextBlock Text="Plesk Outgoing Mail Control · Accountübersicht und Limitüberschreitungen"
+                                   Margin="0,3,0,0"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                    </StackPanel>
+
+                    <Border Grid.Row="1"
+                            CornerRadius="8"
+                            BorderBrush="#BFDBFE"
+                            BorderThickness="1"
+                            Background="#EFF6FF"
+                            Padding="12,10"
+                            Margin="0,0,0,14">
+                        <TextBlock Text="{Binding MailSecurityStatusText}"
+                                   FontSize="13"
+                                   Foreground="#1D4ED8"
+                                   TextWrapping="Wrap" />
+                    </Border>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource ReputationCard}">
+                            <StackPanel>
+                                <TextBlock Text="Postfächer im Plesk-Bestand"
+                                           Style="{StaticResource ReputationFieldLabel}" />
+                                <TextBlock Text="{Binding MailSecurityMailboxCountText}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Style="{StaticResource ReputationCard}">
+                            <StackPanel>
+                                <TextBlock Text="Mit aktuellen Plesk-Statistikzeilen"
+                                           Style="{StaticResource ReputationFieldLabel}" />
+                                <TextBlock Text="{Binding MailSecurityActiveCountText}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="4" Style="{StaticResource ReputationCard}">
+                            <StackPanel>
+                                <TextBlock Text="Accounts mit Ablehnungen"
+                                           Style="{StaticResource ReputationFieldLabel}" />
+                                <TextBlock Text="{Binding MailSecurityRejectedCountText}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           Foreground="#DC2626" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="3" MinHeight="240">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.7*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="1*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0"
+                                Style="{StaticResource ReputationCard}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0"
+                                           Text="Accounts mit Plesk-Statistik"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+
+                                <TextBlock Grid.Row="1"
+                                           Text="Nach Ablehnungen absteigend · Zeile auswählen"
+                                           FontSize="12"
+                                           Margin="0,4,0,12"
+                                           Foreground="{StaticResource SecondaryTextBrush}" />
+
+                                <DataGrid Grid.Row="2"
+                                          ItemsSource="{Binding MailSecurityAccounts}"
+                                          SelectedItem="{Binding SelectedMailSecurityAccount, Mode=TwoWay}"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          HeadersVisibility="Column"
+                                          RowHeaderWidth="0"
+                                          SelectionMode="Single"
+                                          GridLinesVisibility="Horizontal"
+                                          BorderThickness="0"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="POSTFACH"
+                                                            Binding="{Binding Account}"
+                                                            Width="2*" />
+
+                                        <DataGridTextColumn Header="LIMIT"
+                                                            Binding="{Binding LimitText}"
+                                                            Width="*" />
+
+                                        <DataGridTextColumn Header="ZUGELASSEN"
+                                                            Binding="{Binding PassedText}"
+                                                            Width="*" />
+
+                                        <DataGridTextColumn Header="ABGEWIESEN"
+                                                            Binding="{Binding RejectedText}"
+                                                            Width="*" />
+
+                                        <DataGridTextColumn Header="HINWEIS"
+                                                            Binding="{Binding StatusText}"
+                                                            Width="1.4*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="2"
+                                Style="{StaticResource ReputationCard}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0"
+                                           Text="Account-Details"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+
+                                <TextBlock Grid.Row="1"
+                                           Margin="0,12,0,4"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding SelectedMailSecurityAccount.Account}" />
+
+                                <TextBlock Grid.Row="2"
+                                           Margin="0,0,0,4"
+                                           FontSize="12"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           Text="{Binding SelectedMailSecurityAccount.StatusText}" />
+
+                                <TextBlock Grid.Row="3"
+                                           Margin="0,10,0,6"
+                                           FontSize="12"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           Text="Plesk-Berichtszeilen (Quellzeit)" />
+
+                                <DataGrid Grid.Row="4"
+                                          ItemsSource="{Binding SelectedMailSecurityAccount.Periods}"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          HeadersVisibility="Column"
+                                          RowHeaderWidth="0"
+                                          GridLinesVisibility="Horizontal"
+                                          BorderThickness="0"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="ZEIT"
+                                                            Binding="{Binding Time}"
+                                                            Width="2*" />
+                                        <DataGridTextColumn Header="OK"
+                                                            Binding="{Binding PassedText}"
+                                                            Width="*" />
+                                        <DataGridTextColumn Header="BLOCKIERT"
+                                                            Binding="{Binding RejectedText}"
+                                                            Width="*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <StackPanel Grid.Row="4" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding MailSecurityDataAgeText}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                        <TextBlock Margin="0,5,0,0"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Text="Nur Leseansicht. Die Plesk-Zahlen gelten ausschließlich für die gelieferten Berichtszeilen; sie sind weder eine vollständige 24-Stunden-Statistik noch ein Spamnachweis. Versandkontrolle und automatische Sperren sind noch deaktiviert." />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
         </TabControl>
 
     </Grid>

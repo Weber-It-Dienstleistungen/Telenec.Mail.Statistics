@@ -59,4 +59,10 @@ public interface IAdminStatisticsClient
     /// </summary>
     Task TriggerReputationCheckAsync(
         CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Lädt aggregierte 24-Stunden-Mailverkehrsdaten.
+    /// Die Schnittstelle startet keine Serverabfragen oder Protokollanalyse.
+    /// </summary>
+    Task<MailTrafficResponse> GetMailTrafficAsync(
+        CancellationToken cancellationToken = default);
 }

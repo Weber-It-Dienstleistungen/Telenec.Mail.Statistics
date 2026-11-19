@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Endpoints;
+using Telenec.Mail.Statistics.Server.MailTraffic;
 using Telenec.Mail.Statistics.Server.Options;
 using Telenec.Mail.Statistics.Server.Reputation;
 using Telenec.Mail.Statistics.Server.Security;
@@ -99,6 +100,12 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<TimeProvider>(
     TimeProvider.System);
+
+/*
+ * Lesezugriff auf optionale, extern aggregierte Mailverkehrsdaten.
+ * Ohne konfigurierten Snapshot bleibt die Funktion ausdrücklich inaktiv.
+ */
+builder.Services.AddSingleton<MailTrafficSnapshotReader>();
 
 builder.Services.AddScoped<
     IUsageStatisticsService,

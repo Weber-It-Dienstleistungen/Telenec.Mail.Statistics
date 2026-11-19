@@ -113,6 +113,8 @@ def collect_mailboxes(root):
 def parse_snapshot(source):
     accounts = collect_mailboxes(source)
     active = []
+    ignored_empty_periods = 0
+    accounts_without_usable_periods = 0
     for account, mail in accounts:
         limit = mail.get("out_limit")
         if type(limit) is not int or limit < 0:
@@ -143,7 +145,12 @@ def parse_snapshot(source):
             passed = exact_nonnegative_int(item.get("passed"), True)
             rejected = exact_nonnegative_int(item.get("rejected"), True)
             if passed is None and rejected is None:
-                raise SourceError("Stundenwert ohne Versand- und Ablehnungszahl.")
+                # Plesk kann Statistikzeilen liefern, die lediglich
+                # "time" oder bislang nicht ausgewertete Zusatzfelder
+                # (z. B. passed_fixed) enthalten. Nicht als 0 werten,
+                # sondern gesondert zaehlen und ohne Abbruch auslassen.
+                ignored_empty_periods += 1
+                continue
             if passed is not None:
                 has_passed = True
                 total_passed += passed
@@ -155,6 +162,10 @@ def parse_snapshot(source):
                 "passed": passed,
                 "rejected": rejected,
             })
+        if not periods:
+            accounts_without_usable_periods += 1
+            continue
+
         active.append({
             "account": account,
             "outLimit": limit,
@@ -175,6 +186,10 @@ def parse_snapshot(source):
         "source": "plesk-mailmng-outgoing-hour",
         "mailboxCount": len(accounts),
         "accounts": active,
+        "_diagnostic": {
+            "ignoredEmptyPeriods": ignored_empty_periods,
+            "accountsWithoutUsablePeriods": accounts_without_usable_periods,
+        },
     }
 
 
@@ -245,6 +260,10 @@ def main():
         print("Accounts mit abgewiesenen Versandversuchen:",
               sum(1 for row in snapshot["accounts"]
                   if (row["rejected"] or 0) > 0))
+        print("Plesk-Zeilen ohne passed/rejected (nicht als 0 gezaehlt):",
+              snapshot["_diagnostic"]["ignoredEmptyPeriods"])
+        print("Accounts nur mit nicht auswertbaren Zeilen:",
+              snapshot["_diagnostic"]["accountsWithoutUsablePeriods"])
         print("Plesk-Statistik: Stundenbezogene Quellwerte, kein 24h-Vollbild.")
         if args.write:
             write_atomically(snapshot, args.output, args.owner)

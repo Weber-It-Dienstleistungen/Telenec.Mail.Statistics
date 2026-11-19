@@ -246,11 +246,13 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     recipients = collections.Counter()
     confirmed_outgoing = 0
     unconfirmed_submissions = 0
+    all_submissions_in_window = 0
 
     for qid, (at, account) in submissions.items():
         if at < start:
             continue
 
+        all_submissions_in_window += 1
         if qid not in queued:
             unconfirmed_submissions += 1
             continue
@@ -302,6 +304,14 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
         "outgoing": confirmed_outgoing,
         "incoming": confirmed_incoming,
         "unconfirmed_auth": unconfirmed_submissions,
+        "submission_queue_ids": all_submissions_in_window,
+        "sasl_events": sasl_events,
+        "unique_sasl_queue_ids": len(sasl_queue_ids),
+        "qmgr_events": qmgr_events,
+        "unique_qmgr_queue_ids": len(qmgr_queue_ids),
+        "qmgr_matching_pattern": qmgr_matching_pattern,
+        "sasl_qmgr_overlap": len(sasl_queue_ids & qmgr_queue_ids),
+        "sasl_queued_overlap": len(sasl_queue_ids & queued),
         "local_pickup": pickups_in_window,
         "unique_senders": len(senders),
         "unique_recipients": len(recipients),
@@ -354,8 +364,9 @@ def main() -> int:
         help="Verzeichnis mit maillog und maillog.processed*"
     )
     parser.add_argument(
-        "--timezone", default="Europe/Berlin",
-        help="Zeitzone von RFC3164-Mailprotokollen (Default Europe/Berlin)"
+        "--timezone", default="auto",
+        help="Zeitzone von RFC3164-Logs; auto liest die Hostzeitzone. "
+             "Mit --timezone UTC oder --timezone Europe/Berlin ueberschreiben."
     )
     parser.add_argument(
         "--write", action="store_true",
@@ -378,7 +389,26 @@ def main() -> int:
         parser.error("--group ist nur mit --write erlaubt")
 
     try:
-        zone = ZoneInfo(args.timezone)
+        if args.timezone == "auto":
+            # RFC3164-Syslog benutzt normalerweise die Host-Zeitzone.
+            # Auf Ubuntu zuerst /etc/timezone, sonst /etc/localtime nutzen.
+            timezone_file = Path("/etc/timezone")
+            if timezone_file.is_file():
+                zone_name = timezone_file.read_text(
+                    encoding="utf-8"
+                ).strip()
+            else:
+                localtime = str(Path("/etc/localtime").resolve())
+                marker = "/zoneinfo/"
+                if marker not in localtime:
+                    raise RuntimeError(
+                        "Log-Zeitzone nicht ermittelbar: --timezone setzen."
+                    )
+                zone_name = localtime.split(marker, 1)[1]
+        else:
+            zone_name = args.timezone
+
+        zone = ZoneInfo(zone_name)
         now = dt.datetime.now(UTC)
         snapshot, diagnostic = analyze(args.log_dir, now, zone)
 

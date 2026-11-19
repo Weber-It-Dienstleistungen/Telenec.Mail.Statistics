@@ -434,4 +434,64 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
 
         return mailTraffic;
     }
+
+    /// <summary>
+    /// Geschuetzte Plesk-Sicherheitsstatistiken, nur lesend.
+    /// Bestehende Server ohne diesen Endpunkt bleiben unterstuetzt.
+    /// </summary>
+    public async Task<MailSecurityResponse> GetMailSecurityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri =
+            await _baseUrlProvider.GetBaseUriAsync(cancellationToken);
+
+        var uri =
+            new Uri(baseUri, "api/v1/admin/mail-security");
+
+        var apiKey =
+            await _apiKeyProvider.GetApiKeyAsync(cancellationToken);
+
+        using var request =
+            new HttpRequestMessage(HttpMethod.Get, uri);
+
+        request.Headers.TryAddWithoutValidation(
+            AdminApiKeyHeaderName,
+            apiKey);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new UnauthorizedAccessException(
+                "Der Admin-API-Schluessel wurde abgelehnt.");
+        }
+
+        if (response.StatusCode is HttpStatusCode.NotFound
+            or HttpStatusCode.MethodNotAllowed)
+        {
+            throw new NotSupportedException(
+                "Die Mail-Sicherheits-API ist auf diesem Server nicht verfuegbar.");
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var result =
+            await response.Content.ReadFromJsonAsync<MailSecurityResponse>(
+                cancellationToken: cancellationToken);
+
+        if (result is null)
+        {
+            throw new InvalidDataException(
+                "Die Plesk-Sicherheits-API hat keine Daten geliefert.");
+        }
+
+        await _apiKeyProvider.ConfirmApiKeyAsync(apiKey, cancellationToken);
+        await _baseUrlProvider.ConfirmBaseUriAsync(baseUri, cancellationToken);
+
+        return result;
+    }
 }

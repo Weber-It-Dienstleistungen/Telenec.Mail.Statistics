@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.Endpoints;
 using Telenec.Mail.Statistics.Server.MailTraffic;
+using Telenec.Mail.Statistics.Server.MailSecurity;
 using Telenec.Mail.Statistics.Server.Options;
 using Telenec.Mail.Statistics.Server.Reputation;
 using Telenec.Mail.Statistics.Server.Security;
@@ -106,6 +107,9 @@ builder.Services.AddSingleton<TimeProvider>(
  * Ohne konfigurierten Snapshot bleibt die Funktion ausdrücklich inaktiv.
  */
 builder.Services.AddSingleton<MailTrafficSnapshotReader>();
+
+/* Optionales, nur lesendes Plesk Security Center; ohne SnapshotPath inaktiv. */
+builder.Services.AddSingleton<MailSecuritySnapshotReader>();
 
 builder.Services.AddScoped<
     IUsageStatisticsService,

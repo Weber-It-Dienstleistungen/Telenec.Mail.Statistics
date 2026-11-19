@@ -211,6 +211,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         await LoadStatisticsAsync(cancellationToken);
 
         await LoadReputationAsync(cancellationToken);
+
+        // Unabhängiger dritter Bereich: keine Auswirkungen
+        // auf die beiden bisherigen Statistikansichten.
+        await LoadMailTrafficAsync(cancellationToken);
     }
 
     // Der Server-Check und das Laden seiner Ergebnisse

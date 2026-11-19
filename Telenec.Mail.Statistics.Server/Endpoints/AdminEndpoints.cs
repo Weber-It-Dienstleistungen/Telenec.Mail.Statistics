@@ -1,5 +1,6 @@
 ﻿
 using Telenec.Mail.Statistics.Server.MailTraffic;
+using Telenec.Mail.Statistics.Server.MailSecurity;
 using Telenec.Mail.Statistics.Server.Reputation;
 using Telenec.Mail.Statistics.Server.Security;
 using Telenec.Mail.Statistics.Server.Services;
@@ -45,6 +46,15 @@ public static class AdminEndpoints
             HandleMailTrafficAsync);
 
         /*
+         * Geschuetzte Plesk-Sicherheitsstatistiken.
+         * Die API ist ausschliesslich lesend und fuehrt keine
+         * Plesk-Kommandos oder Postfach-Aktionen aus.
+         */
+        endpoints.MapGet(
+            "/api/v1/admin/mail-security",
+            HandleMailSecurityAsync);
+
+        /*
          * Geschützter manueller Prüfauslöser.
          *
          * Nur POST startet externe Abfragen.
@@ -88,6 +98,24 @@ public static class AdminEndpoints
         HttpRequest request,
         IAdminApiKeyValidator apiKeyValidator,
         MailTrafficSnapshotReader reader,
+        CancellationToken cancellationToken)
+    {
+        var providedApiKey =
+            request.Headers[AdminApiKeyHeaderName].FirstOrDefault();
+
+        if (!apiKeyValidator.IsValid(providedApiKey))
+        {
+            return Results.Unauthorized();
+        }
+
+        var data = await reader.ReadAsync(cancellationToken);
+        return Results.Ok(data);
+    }
+
+    private static async Task<IResult> HandleMailSecurityAsync(
+        HttpRequest request,
+        IAdminApiKeyValidator apiKeyValidator,
+        MailSecuritySnapshotReader reader,
         CancellationToken cancellationToken)
     {
         var providedApiKey =

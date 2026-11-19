@@ -81,18 +81,20 @@ Die bestehende Paketidentitaet zuerst aus einem alten Release
 ermitteln. Beispiel, wenn die alte Feed-Datei lokal vorliegt:
 
 ```powershell
-((Get-Content '.\Releases\releases.win.json' -Raw | ConvertFrom-Json).Assets | Select-Object -First 1).PackageId
+((Get-Content '.\Releases\releases.test.json' -Raw | ConvertFrom-Json).Assets | Select-Object -First 1).PackageId
 ```
 
 Wenn dort kein altes Feed existiert, aus der aktuellen Installation
 `sq.version` oder den bisherigen GitHub-Release-Assets ermitteln.
-Die bisherige `win`-Channel-Kennung ebenfalls bestaetigen. Wenn
-sie abweicht, Paketierung zuerst darauf abstimmen.
+Den bisherigen Channel aus der installierten `sq.version` bestaetigen.
+Fruehere Releases verwendeten offenbar den Kanal `test`. Nicht
+stillschweigend auf `win` wechseln: Das wuerde den Updatepfad
+fuer installierte Clients unterbrechen.
 
 Anschliessend:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tools\Build-StatisticsAdminRelease.ps1" -ExistingPackId "<EXAKTER_BISHERIGER_PACKID>"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tools\Build-StatisticsAdminRelease.ps1" -ExistingPackId "<EXAKTER_BISHERIGER_PACKID>" -ExistingChannel test
 ```
 
 Der Helfer erstellt einen `win-x64`-Release-Build und das Velopack

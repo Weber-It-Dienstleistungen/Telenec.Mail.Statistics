@@ -1,4 +1,5 @@
 ﻿
+using Telenec.Mail.Statistics.Server.MailTraffic;
 using Telenec.Mail.Statistics.Server.Reputation;
 using Telenec.Mail.Statistics.Server.Security;
 using Telenec.Mail.Statistics.Server.Services;
@@ -33,6 +34,15 @@ public static class AdminEndpoints
         endpoints.MapGet(
             "/api/v1/admin/reputation",
             HandleReputation);
+
+        /*
+         * Optionaler 24-Stunden-Mailverkehrsreport.
+         * Nur aggregierte Zähler, ausschließlich mit Admin-Key.
+         * Ohne Quelle wird Available=false statt falscher Nullwerte geliefert.
+         */
+        endpoints.MapGet(
+            "/api/v1/admin/mail-traffic",
+            HandleMailTrafficAsync);
 
         /*
          * Geschützter manueller Prüfauslöser.
@@ -72,6 +82,24 @@ public static class AdminEndpoints
                     cancellationToken);
 
         return Results.Ok(statistics);
+    }
+
+    private static async Task<IResult> HandleMailTrafficAsync(
+        HttpRequest request,
+        IAdminApiKeyValidator apiKeyValidator,
+        MailTrafficSnapshotReader reader,
+        CancellationToken cancellationToken)
+    {
+        var providedApiKey =
+            request.Headers[AdminApiKeyHeaderName].FirstOrDefault();
+
+        if (!apiKeyValidator.IsValid(providedApiKey))
+        {
+            return Results.Unauthorized();
+        }
+
+        var data = await reader.ReadAsync(cancellationToken);
+        return Results.Ok(data);
     }
 
     /// <summary>

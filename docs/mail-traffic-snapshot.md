@@ -6,10 +6,11 @@ Der dritte Reiter **Mail-Statistik** zeigt Mailverkehr der letzten 24 Stunden:
 24 stündliche Werte für eingehende und ausgehende Nachrichten sowie die
 drei meistgenutzten Sender- und Empfänger-Accounts.
 
-**Stand Sprint 36:** GUI und geschützte Lese-API sind implementiert.
-Ein Collector, der echte Daten des Mailservers aggregiert, ist noch nicht
-angeschlossen. Die Oberfläche zeigt bis dahin ausdrücklich „Datenquelle
-nicht eingerichtet“ statt vermeintlicher Nullwerte.
+**Stand Sprint 36.2:** GUI und geschützte Lese-API sind implementiert.
+Der Postfix/Plesk-Collector liegt unter `tools/telenec-mail-traffic-collector.py`.
+Er läuft standardmäßig **nur diagnostisch** und schreibt ohne `--write` keine Datei.
+Ein periodischer Collector und eine produktive Datenquelle sind noch nicht aktiviert.
+Die Oberfläche zeigt deshalb weiterhin „Datenquelle nicht eingerichtet“.
 
 ## Lese-Schnittstelle
 
@@ -34,10 +35,12 @@ Die Schlüssel heißen:
 - `topSenders`: 0–3 Einträge `{ "account": "konto@example.org", "count": 12 }`
 - `topRecipients`: 0–3 Einträge im selben Format
 
-Jedes `hourStartUtc` ist `windowStartUtc` plus 0–23 Stunden.
-Counts dürfen nicht negativ sein. Die Datei darf höchstens 256 KiB groß sein.
-Generierung und Ende des Zeitfensters müssen jeweils höchstens 15 Minuten
-zurückliegen. Ungültige oder veraltete Snapshots werden **nicht** angezeigt.
+Jedes `hourStartUtc` ist `windowStartUtc` plus 0–23 Stunden. Die 24 Balken
+beginnen um volle UTC-Stunden (`hh:00`); der letzte ist die **laufende,
+noch unvollständige** Stunde. Deshalb darf `windowEndUtc` maximal 60 Minuten
+in der Zukunft liegen. Die Erzeugungszeit muss aktuell sein (maximal 15 Minuten
+alt). Counts dürfen nicht negativ sein, die Datei darf höchstens 256 KiB
+groß sein. Ungültige oder veraltete Snapshots werden **nicht** angezeigt.
 
 Ein Beispiel mit zwei Stunden (schematisch, **keine gültige vollständige Datei**):
 
@@ -58,6 +61,20 @@ Ein Beispiel mit zwei Stunden (schematisch, **keine gültige vollständige Datei
   ]
 }
 ```
+
+## Manuelle Diagnose auf dem Plesk-Server
+
+`python3 tools/telenec-mail-traffic-collector.py` führt ausschließlich
+lesende Untersuchungen aus und gibt nur Summen und stündliche Zähler aus.
+Die Log-Zeitzone wird unter Ubuntu aus `/etc/timezone` oder `/etc/localtime`
+ermittelt. Mit `--timezone UTC` beziehungsweise `--timezone Europe/Berlin`
+kann sie zur Gegenprüfung fest vorgegeben werden.
+
+Die Ausgabe nennt zusätzlich die Anzahl eindeutiger SASL- und qmgr-Queue-IDs
+sowie deren Überschneidung. Wenn über 20 % der SASL-Queue-IDs keine zugehörige
+qmgr-Bestätigung besitzen, verweigert der Collector das **Snapshot-Schreiben**;
+als reine Diagnose ist der Lauf weiterhin erlaubt. Diese Schwelle ist eine
+vorläufige Sicherheitsgrenze und ersetzt keine fachliche Validierung.
 
 ## Anforderungen an die spätere Datenquelle
 

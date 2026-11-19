@@ -146,8 +146,12 @@ def hourly_index(time: dt.datetime, start: dt.datetime) -> int:
 
 
 def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
-    end = clock.replace(second=0, microsecond=0)
-    start = end - dt.timedelta(hours=24)
+    # 24 stündliche Balken ab hh:00; der letzte Balken ist laufend
+    # und daher noch nicht abgeschlossen.
+    current_hour = clock.replace(minute=0, second=0, microsecond=0)
+    start = current_hour - dt.timedelta(hours=23)
+    end = current_hour + dt.timedelta(hours=1)
+    observed_until = clock
     context_start = start - dt.timedelta(hours=3)
 
     submissions = {}
@@ -158,6 +162,11 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     files = []
     parsed_lines = 0
     relevant_lines = 0
+    sasl_events = 0
+    qmgr_events = 0
+    qmgr_matching_pattern = 0
+    sasl_queue_ids = set()
+    qmgr_queue_ids = set()
     earliest = None
     latest = None
 
@@ -168,7 +177,7 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                 continue
 
             at = read_timestamp(line, clock, timezone)
-            if at is None or at < context_start or at >= end:
+            if at is None or at < context_start or at > observed_until:
                 continue
 
             match = POSTFIX.search(line)
@@ -184,6 +193,8 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
             details = match.group("details")
 
             if process == "smtpd" and "sasl_username=" in details:
+                sasl_events += 1
+                sasl_queue_ids.add(qid)
                 sasl = SASL.search(details)
                 if sasl:
                     account = normalize_account(sasl.group("account"))
@@ -193,9 +204,13 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                             submissions[qid] = (at, account)
                         relevant_lines += 1
 
-            elif process == "qmgr" and QMANAGER.search(details):
-                queued.add(qid)
-                relevant_lines += 1
+            elif process == "qmgr":
+                qmgr_events += 1
+                qmgr_queue_ids.add(qid)
+                if QMANAGER.search(details):
+                    qmgr_matching_pattern += 1
+                    queued.add(qid)
+                    relevant_lines += 1
 
             elif process == "pickup":
                 previous = pickups.get(qid)

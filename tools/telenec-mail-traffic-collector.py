@@ -154,9 +154,12 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     observed_until = clock
     context_start = start - dt.timedelta(hours=3)
 
-    submissions = {}
-    queued = set()
-    milter_rejected = set()
+    # Die Queue-ID allein ist über rotierte Logdateien keine sichere
+    # Ereignisidentitaet. Zeitpunkte pro Queue-ID separat sammeln und
+    # spaeter den konkreten SMTP-Annahmevorgängen zuordnen.
+    submissions = collections.defaultdict(set)
+    queued = collections.defaultdict(set)
+    milter_rejected = collections.defaultdict(set)
     pickups = {}
     deliveries = {}
 
@@ -210,9 +213,7 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                     if sasl:
                         account = normalize_account(sasl.group("account"))
                         if account is not None:
-                            previous = submissions.get(qid)
-                            if previous is None or at < previous[0]:
-                                submissions[qid] = (at, account)
+                            submissions[qid].add((at, account))
                             relevant_lines += 1
                 else:
                     sasl_other_events += 1
@@ -222,14 +223,14 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                 qmgr_queue_ids.add(qid)
                 if QMANAGER.search(details):
                     qmgr_matching_pattern += 1
-                    queued.add(qid)
+                    queued[qid].add(at)
                     relevant_lines += 1
 
             elif process == "cleanup" and details.startswith("milter-reject:"):
                 # Der Milter hat die Nachricht vor der Queue-Uebergabe
                 # explizit abgewiesen. Dies ist keine versendete Nachricht
                 # und kein ungeklärtes Fehlen eines qmgr-Eintrags.
-                milter_rejected.add(qid)
+                milter_rejected[qid].add(at)
                 relevant_lines += 1
 
             elif process == "pickup":
@@ -270,30 +271,53 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     conflicting_rejections = 0
     all_submissions_in_window = 0
 
-    for qid, (at, account) in submissions.items():
-        if at < start:
-            continue
+    # Eine Queue-ID kann in einem längeren Logfenster erneut auftreten.
+    # Deshalb Ereignisse nur mit einer zeitlich passenden SMTP-Annahme
+    # korrelieren. Die 15-Minuten-Frist ist konservativ: spaetere oder
+    # mehrdeutige Ereignisse werden nicht stillschweigend als Versand
+    # interpretiert. Ein naechstes Annahmeereignis derselben ID beendet
+    # die Zuordnung zum vorigen Vorgang.
+    correlation_window = dt.timedelta(minutes=15)
+    for qid, events in submissions.items():
+        acceptances = sorted(events, key=lambda entry: (entry[0], entry[1]))
+        qmgr_times = queued.get(qid, set())
+        reject_times = milter_rejected.get(qid, set())
 
-        all_submissions_in_window += 1
-        if qid not in queued:
-            if qid in milter_rejected:
+        for position, (at, account) in enumerate(acceptances):
+            if at < start or at > observed_until:
+                continue
+
+            all_submissions_in_window += 1
+            limit = min(at + correlation_window, end)
+            if position + 1 < len(acceptances):
+                limit = min(limit, acceptances[position + 1][0])
+
+            queued_for_acceptance = any(
+                at <= event_at < limit for event_at in qmgr_times
+            )
+            rejected_for_acceptance = any(
+                at <= event_at < limit for event_at in reject_times
+            )
+
+            if queued_for_acceptance and rejected_for_acceptance:
+                # Dieselbe Annahme kann hier nicht eindeutig als
+                # abgewiesen oder in die Queue gestellt gelten.
+                conflicting_rejections += 1
+                continue
+
+            if rejected_for_acceptance:
                 rejected_submissions += 1
-            else:
+                continue
+
+            if not queued_for_acceptance:
                 unconfirmed_submissions += 1
-            continue
+                continue
 
-        # Ein qmgr-Eintrag und ein Milter-Reject zur selben Queue-ID
-        # im selben Zeitfenster sind widersprüchlich. Nicht blind
-        # diesen Fall als valide Annahme freigeben.
-        if qid in milter_rejected:
-            conflicting_rejections += 1
-            continue
-
-        index = hourly_index(at, start)
-        if 0 <= index < 24:
-            hours[index]["outgoing"] += 1
-            senders[account] += 1
-            confirmed_outgoing += 1
+            index = hourly_index(at, start)
+            if 0 <= index < 24:
+                hours[index]["outgoing"] += 1
+                senders[account] += 1
+                confirmed_outgoing += 1
 
     confirmed_incoming = 0
     for (_qid, account), at in deliveries.items():
@@ -340,17 +364,18 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
         "conflicting_milter_qmgr": conflicting_rejections,
         "submission_queue_ids": all_submissions_in_window,
         "milter_reject_queue_ids": len(milter_rejected),
+        "correlation_window_minutes": 15,
         "sasl_events": sasl_events,
         "sasl_client_events": sasl_client_events,
         "sasl_other_events": sasl_other_events,
         "unique_sasl_queue_ids": len(sasl_queue_ids),
         "unique_accepted_sasl_queue_ids": len(accepted_sasl_queue_ids),
-        "accepted_sasl_qmgr_overlap": len(accepted_sasl_queue_ids & queued),
+        "accepted_sasl_qmgr_overlap": len(accepted_sasl_queue_ids & set(queued)),
         "qmgr_events": qmgr_events,
         "unique_qmgr_queue_ids": len(qmgr_queue_ids),
         "qmgr_matching_pattern": qmgr_matching_pattern,
         "sasl_qmgr_overlap": len(sasl_queue_ids & qmgr_queue_ids),
-        "sasl_queued_overlap": len(sasl_queue_ids & queued),
+        "sasl_queued_overlap": len(sasl_queue_ids & set(queued)),
         "local_pickup": pickups_in_window,
         "unique_senders": len(senders),
         "unique_recipients": len(recipients),
@@ -463,8 +488,10 @@ def main() -> int:
               diagnostic["milter_rejected_auth"])
         print("Ungeklaerte SASL-Einlieferungen (ohne qmgr und Reject):",
               diagnostic["unconfirmed_auth"])
-        print("Widerspruechliche IDs (qmgr und Milter-Reject):",
+        print("Zeitlich widerspruechliche Einlieferungen (qmgr und Milter-Reject):",
               diagnostic["conflicting_milter_qmgr"])
+        print("Zeitliches Zuordnungsfenster (Minuten):",
+              diagnostic["correlation_window_minutes"])
         print("SASL-Ereigniszeilen (erweiterter Zeitraum):",
               diagnostic["sasl_events"])
         print("Davon SMTP-Annahmeereignisse (client=):",
@@ -505,9 +532,9 @@ def main() -> int:
 
         if conflicting:
             print(
-                "WARNUNG: SASL-Queue-IDs mit qmgr und Milter-Reject. "
-                "Die eindeutige Zuordnung muss vor einem Snapshot "
-                "geklaert werden.",
+                "WARNUNG: Derselbe zeitliche SMTP-Annahmevorgang hat "
+                "qmgr- und Milter-Reject-Ereignisse. Die Zuordnung muss "
+                "vor einem Snapshot geklaert werden.",
                 file=sys.stderr,
             )
             if args.write:

@@ -71,10 +71,21 @@ ermittelt. Mit `--timezone UTC` beziehungsweise `--timezone Europe/Berlin`
 kann sie zur Gegenprüfung fest vorgegeben werden.
 
 Die Ausgabe nennt zusätzlich die Anzahl eindeutiger SASL- und qmgr-Queue-IDs
-sowie deren Überschneidung. Wenn über 20 % der SASL-Queue-IDs keine zugehörige
-qmgr-Bestätigung besitzen, verweigert der Collector das **Snapshot-Schreiben**;
-als reine Diagnose ist der Lauf weiterhin erlaubt. Diese Schwelle ist eine
-vorläufige Sicherheitsgrenze und ersetzt keine fachliche Validierung.
+sowie deren Überschneidung. Explizite `postfix/cleanup ... milter-reject:`-Aktionen
+werden als **abgewiesene Nachrichten** getrennt ausgewiesen. Sie sind weder
+erfolgreiche SMTP-Einlieferungen noch ungeklärte Queue-IDs. Queue-IDs, zu denen
+sowohl ein `qmgr`- als auch ein Milter-Reject-Ereignis gefunden wurde, gelten
+als widersprüchlich und werden nicht gezählt.
+
+Wenn mehr als 20 % der verbleibenden, **nicht abgewiesenen** Einlieferungen
+weder eine qmgr-Bestätigung noch eine Milter-Ablehnung besitzen, verweigert
+der Collector das **Snapshot-Schreiben**. Bei widersprüchlichen IDs wird es
+ebenfalls gesperrt. Der reine Diagnoselauf bleibt möglich. Diese Schwelle ist
+eine vorläufige Sicherheitsgrenze und ersetzt keine fachliche Validierung.
+
+Die Milter-Diagnose beschreibt die im gewählten Zeitfenster auffindbaren
+Logereignisse. Die bisherige über mehrere Logtage aggregierte AWK-Auswertung
+ist **nicht** gleichzusetzen mit einer 24-Stunden-Statistik.
 
 ## Anforderungen an die spätere Datenquelle
 

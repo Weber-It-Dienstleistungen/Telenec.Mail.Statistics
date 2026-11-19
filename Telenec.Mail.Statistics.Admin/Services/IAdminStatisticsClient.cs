@@ -65,4 +65,11 @@ public interface IAdminStatisticsClient
     /// </summary>
     Task<MailTrafficResponse> GetMailTrafficAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Liest Plesk Outgoing Mail Control Snapshotdaten (keine Aktionen).
+    /// Ohne konfigurierte Datenquelle Available=false.
+    /// </summary>
+    Task<MailSecurityResponse> GetMailSecurityAsync(
+        CancellationToken cancellationToken = default);
 }

@@ -110,10 +110,10 @@ public sealed partial class MainWindowViewModel
             var incomingMaximum = hours.Max(h => h.Incoming);
 
             MailTrafficOutgoingBars =
-                CreateBars(hours, outgoing: true, outgoingMaximum);
+                CreateBars(hours, outgoing: true, maximum: outgoingMaximum);
 
             MailTrafficIncomingBars =
-                CreateBars(hours, outgoing: false, incomingMaximum);
+                CreateBars(hours, outgoing: false, maximum: incomingMaximum);
 
             MailTrafficOutgoingTotalText =
                 hours.Sum(h => (long)h.Outgoing).ToString("N0");

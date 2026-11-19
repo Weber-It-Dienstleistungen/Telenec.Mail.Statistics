@@ -413,7 +413,8 @@ def main() -> int:
         snapshot, diagnostic = analyze(args.log_dir, now, zone)
 
         print("=== Telenec Mailverkehr – Diagnose (ohne Accountnamen) ===")
-        print("Zeitfenster:", snapshot["windowStartUtc"], "bis",
+        print("Log-Zeitzone:", zone_name)
+        print("Zeitfenster (24 Stundenbloecke; aktuelle Stunde unvollstaendig):", snapshot["windowStartUtc"], "bis",
               snapshot["windowEndUtc"])
         print("Eingelesene Dateien:", ", ".join(diagnostic["files"]) or "keine")
         print("Postfix-Zeilen im erweiterten Zeitraum:", diagnostic["parsed_lines"])
@@ -421,6 +422,19 @@ def main() -> int:
         print("Erfolgreiche Plesk-Postfachzustellungen:", diagnostic["incoming"])
         print("SASL-Einlieferungen ohne qmgr-Bestätigung:",
               diagnostic["unconfirmed_auth"])
+        print("SASL-Ereigniszeilen (erweiterter Zeitraum):",
+              diagnostic["sasl_events"])
+        print("Unterschiedliche SASL-Queue-IDs:",
+              diagnostic["unique_sasl_queue_ids"])
+        print("qmgr-Ereigniszeilen:", diagnostic["qmgr_events"])
+        print("Unterschiedliche qmgr-Queue-IDs:",
+              diagnostic["unique_qmgr_queue_ids"])
+        print("qmgr-Zeilen mit erwartetem from/size-Muster:",
+              diagnostic["qmgr_matching_pattern"])
+        print("SASL-Queue-IDs auch in qmgr (beliebige Zeile):",
+              diagnostic["sasl_qmgr_overlap"])
+        print("SASL-Queue-IDs auch in qmgr-from/size:",
+              diagnostic["sasl_queued_overlap"])
         print("Lokale Pickup-Einlieferungen, separat:", diagnostic["local_pickup"])
         print("Unterschiedliche Senderaccounts:", diagnostic["unique_senders"])
         print("Unterschiedliche Empfängeraccounts:", diagnostic["unique_recipients"])
@@ -434,10 +448,17 @@ def main() -> int:
             print("FEHLER: Keine auswertbaren Postfix-Zeilen gefunden.", file=sys.stderr)
             return 2
 
-        if diagnostic["unconfirmed_auth"] and not diagnostic["outgoing"]:
-            print("WARNUNG: SASL-Zeilen wurden gefunden, aber keine zugehörigen "
-                  "qmgr-Einträge. Keine Snapshot-Freigabe.", file=sys.stderr)
-            return 2
+        missing = diagnostic["unconfirmed_auth"]
+        submissions_total = diagnostic["submission_queue_ids"]
+        if submissions_total and missing / submissions_total > 0.20:
+            print(
+                "WARNUNG: Ueber 20 % der SASL-Queue-IDs ohne "
+                "qmgr-from/size-Bestaetigung. Bei Snapshot-Schreiben "
+                "abbrechen; die Versandstatistik waere unvollstaendig.",
+                file=sys.stderr,
+            )
+            if args.write:
+                return 2
 
         # Kein unvollständiger 24-Stunden-Bericht: dies ist nur ein
         # konservativer Plausibilitätscheck, kein Ersatz für Logrotation-Audit.

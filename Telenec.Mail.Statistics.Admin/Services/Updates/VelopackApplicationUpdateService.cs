@@ -7,8 +7,11 @@ namespace Telenec.Mail.Statistics.Admin.Services.Updates;
 public sealed class VelopackApplicationUpdateService
     : IApplicationUpdateService
 {
-    private const string RepositoryUrl =
-        "https://github.com/Weber-It-Dienstleistungen/Telenec.Mail.Statistics";
+    // Permanenter, oeffentlich erreichbarer HTTPS-Updatefeed auf dem
+    // Telenec-Server. Die Admin-API-Adresse und ihre Zugangsdaten sind
+    // davon vollstaendig getrennt.
+    private const string UpdateFeedUrl =
+        "https://dav.necnet.de/updates/statistics-admin/";
 
     private static readonly TimeSpan UpdateCheckTimeout =
         TimeSpan.FromSeconds(5);
@@ -22,11 +25,11 @@ public sealed class VelopackApplicationUpdateService
     {
         try
         {
+            // Bestehende Installationen erhalten diese Umstellung einmalig
+            // ueber ein letztes GitHub-Release. Danach kommen alle neuen
+            // Versionen ausschliesslich vom Telenec-HTTPS-Feed.
             var source =
-                new GithubSource(
-                    RepositoryUrl,
-                    accessToken: null,
-                    prerelease: true);
+                new SimpleWebSource(UpdateFeedUrl);
 
             var updateManager =
                 new UpdateManager(source);

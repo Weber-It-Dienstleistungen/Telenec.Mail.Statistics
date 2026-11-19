@@ -51,9 +51,11 @@ public sealed record MailSecurityAccountRow(
     public string StatusText =>
         Rejected is > 0
             ? "Ablehnungen"
-            : OutLimit > 0 && Passed >= OutLimit
-                ? "Limit erreicht (Hinweis)"
-                : OutLimit == 0
-                    ? "Limit 0 – Einstellung prüfen"
-                    : "Keine Ablehnung gemeldet";
+            : OutLimit == 0
+                ? "Limit 0 – Einstellung prüfen"
+                : OutLimit > 0 && Passed >= OutLimit
+                    ? "Limit erreicht (Hinweis)"
+                    : Rejected is null
+                        ? "Keine Ablehnungsdaten"
+                        : "Keine Ablehnung gemeldet";
 }

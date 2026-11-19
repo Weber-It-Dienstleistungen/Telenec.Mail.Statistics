@@ -89,8 +89,8 @@ public partial class App : Application
 
         /*
          * Eine installierte Velopack-Version prüft vor dem
-         * normalen Programmstart, ob auf GitHub eine neuere
-         * Version vorhanden ist.
+         * normalen Programmstart, ob auf unserem eigenen
+         * Telenec-HTTPS-Updatefeed eine neuere Version vorhanden ist.
          *
          * Bei Visual-Studio-, dotnet-run- und normalen
          * Publish-Starts außerhalb einer Velopack-Installation

@@ -73,9 +73,13 @@ kann sie zur Gegenprüfung fest vorgegeben werden.
 Die Ausgabe nennt zusätzlich die Anzahl eindeutiger SASL- und qmgr-Queue-IDs
 sowie deren Überschneidung. Explizite `postfix/cleanup ... milter-reject:`-Aktionen
 werden als **abgewiesene Nachrichten** getrennt ausgewiesen. Sie sind weder
-erfolgreiche SMTP-Einlieferungen noch ungeklärte Queue-IDs. Queue-IDs, zu denen
-sowohl ein `qmgr`- als auch ein Milter-Reject-Ereignis gefunden wurde, gelten
-als widersprüchlich und werden nicht gezählt.
+erfolgreiche SMTP-Einlieferungen noch ungeklärte Queue-IDs. Da dieselbe
+Queue-ID bei verschiedenen Vorgängen erneut vorkommen kann, erfolgt die
+Zuordnung von SMTP-Annahme, Queue-Bestaetigung und Milter-Ablehnung
+zusätzlich anhand ihrer Zeitpunkte (maximal 15 Minuten, begrenzt durch die
+nächste beobachtete Annahme mit derselben Queue-ID). Nur wenn innerhalb
+dieses konkreten Zeitfensters sowohl `qmgr` als auch Milter-Reject auftreten,
+wird der Vorgang als widersprüchlich gekennzeichnet und nicht gezählt.
 
 Wenn mehr als 20 % der verbleibenden, **nicht abgewiesenen** Einlieferungen
 weder eine qmgr-Bestätigung noch eine Milter-Ablehnung besitzen, verweigert

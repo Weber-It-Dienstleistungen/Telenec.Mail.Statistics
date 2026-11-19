@@ -212,9 +212,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         await LoadReputationAsync(cancellationToken);
 
-        // Unabhängiger dritter Bereich: keine Auswirkungen
-        // auf die beiden bisherigen Statistikansichten.
+        // Unabhaengiger dritter Bereich.
         await LoadMailTrafficAsync(cancellationToken);
+
+        // Vierter Bereich: optionale Plesk-Sicherheitsdaten.
+        // Keine schreibenden Plesk-Aktionen oder Sperren.
+        await LoadMailSecurityAsync(cancellationToken);
     }
 
     // Der Server-Check und das Laden seiner Ergebnisse

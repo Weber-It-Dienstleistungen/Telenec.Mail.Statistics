@@ -156,6 +156,7 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
 
     submissions = {}
     queued = set()
+    milter_rejected = set()
     pickups = {}
     deliveries = {}
 
@@ -224,6 +225,13 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                     queued.add(qid)
                     relevant_lines += 1
 
+            elif process == "cleanup" and details.startswith("milter-reject:"):
+                # Der Milter hat die Nachricht vor der Queue-Uebergabe
+                # explizit abgewiesen. Dies ist keine versendete Nachricht
+                # und kein ungeklärtes Fehlen eines qmgr-Eintrags.
+                milter_rejected.add(qid)
+                relevant_lines += 1
+
             elif process == "pickup":
                 previous = pickups.get(qid)
                 if previous is None or at < previous:
@@ -258,6 +266,8 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     recipients = collections.Counter()
     confirmed_outgoing = 0
     unconfirmed_submissions = 0
+    rejected_submissions = 0
+    conflicting_rejections = 0
     all_submissions_in_window = 0
 
     for qid, (at, account) in submissions.items():
@@ -266,7 +276,17 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
 
         all_submissions_in_window += 1
         if qid not in queued:
-            unconfirmed_submissions += 1
+            if qid in milter_rejected:
+                rejected_submissions += 1
+            else:
+                unconfirmed_submissions += 1
+            continue
+
+        # Ein qmgr-Eintrag und ein Milter-Reject zur selben Queue-ID
+        # im selben Zeitfenster sind widersprüchlich. Nicht blind
+        # diesen Fall als valide Annahme freigeben.
+        if qid in milter_rejected:
+            conflicting_rejections += 1
             continue
 
         index = hourly_index(at, start)
@@ -316,7 +336,10 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
         "outgoing": confirmed_outgoing,
         "incoming": confirmed_incoming,
         "unconfirmed_auth": unconfirmed_submissions,
+        "milter_rejected_auth": rejected_submissions,
+        "conflicting_milter_qmgr": conflicting_rejections,
         "submission_queue_ids": all_submissions_in_window,
+        "milter_reject_queue_ids": len(milter_rejected),
         "sasl_events": sasl_events,
         "sasl_client_events": sasl_client_events,
         "sasl_other_events": sasl_other_events,
@@ -436,8 +459,12 @@ def main() -> int:
         print("Postfix-Zeilen im erweiterten Zeitraum:", diagnostic["parsed_lines"])
         print("Ausgehende authentifizierte Einlieferungen:", diagnostic["outgoing"])
         print("Erfolgreiche Plesk-Postfachzustellungen:", diagnostic["incoming"])
-        print("SASL-Einlieferungen ohne qmgr-Bestätigung:",
+        print("SASL-Queue-IDs mit Milter-Ablehnung (keine Einlieferung):",
+              diagnostic["milter_rejected_auth"])
+        print("Ungeklaerte SASL-Einlieferungen (ohne qmgr und Reject):",
               diagnostic["unconfirmed_auth"])
+        print("Widerspruechliche IDs (qmgr und Milter-Reject):",
+              diagnostic["conflicting_milter_qmgr"])
         print("SASL-Ereigniszeilen (erweiterter Zeitraum):",
               diagnostic["sasl_events"])
         print("Davon SMTP-Annahmeereignisse (client=):",
@@ -472,13 +499,32 @@ def main() -> int:
             print("FEHLER: Keine auswertbaren Postfix-Zeilen gefunden.", file=sys.stderr)
             return 2
 
-        missing = diagnostic["unconfirmed_auth"]
-        submissions_total = diagnostic["submission_queue_ids"]
-        if submissions_total and missing / submissions_total > 0.20:
+        unresolved = diagnostic["unconfirmed_auth"]
+        expected_accepted = diagnostic["outgoing"] + unresolved
+        conflicting = diagnostic["conflicting_milter_qmgr"]
+
+        if conflicting:
             print(
-                "WARNUNG: Ueber 20 % der SASL-Queue-IDs ohne "
-                "qmgr-from/size-Bestaetigung. Bei Snapshot-Schreiben "
-                "abbrechen; die Versandstatistik waere unvollstaendig.",
+                "WARNUNG: SASL-Queue-IDs mit qmgr und Milter-Reject. "
+                "Die eindeutige Zuordnung muss vor einem Snapshot "
+                "geklaert werden.",
+                file=sys.stderr,
+            )
+            if args.write:
+                return 2
+
+        if unresolved:
+            print(
+                "HINWEIS: Einige SASL-Annahmeereignisse haben weder "
+                "qmgr-Bestaetigung noch Milter-Ablehnung.",
+                file=sys.stderr,
+            )
+
+        if expected_accepted and unresolved / expected_accepted > 0.20:
+            print(
+                "WARNUNG: Mehr als 20 % der nicht durch Milter abgewiesenen "
+                "SASL-Einlieferungen sind ungeklaert. "
+                "Snapshot-Schreiben bleibt gesperrt.",
                 file=sys.stderr,
             )
             if args.write:

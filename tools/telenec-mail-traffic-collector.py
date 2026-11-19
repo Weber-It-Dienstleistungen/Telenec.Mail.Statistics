@@ -443,6 +443,10 @@ def main() -> int:
     parser.add_argument(
         "--group", help="Optionale Unix-Gruppe für die Datei (Dateirechte 0640)"
     )
+    parser.add_argument(
+        "--omit-account-rankings", action="store_true",
+        help="Top-3-Accountnamen und -Zaehler im geschriebenen Snapshot leer lassen"
+    )
     args = parser.parse_args()
 
     if args.write and args.output is None:
@@ -451,6 +455,8 @@ def main() -> int:
         parser.error("--output ist nur mit --write erlaubt")
     if args.group and not args.write:
         parser.error("--group ist nur mit --write erlaubt")
+    if args.omit_account_rankings and not args.write:
+        parser.error("--omit-account-rankings ist nur mit --write erlaubt")
 
     try:
         if args.timezone == "auto":
@@ -573,8 +579,17 @@ def main() -> int:
             return 2
 
         if args.write:
+            if args.omit_account_rankings:
+                # Bei automatisch aktualisierten Verkehrskurven bleiben
+                # personenbezogene Rankings absichtlich deaktiviert.
+                # Die internen Aggregationen werden nicht auf Platte
+                # geschrieben und die Stundenwerte bleiben unveraendert.
+                snapshot["topSenders"] = []
+                snapshot["topRecipients"] = []
             atomic_write(args.output, snapshot, args.group)
             print("Aggregierter Snapshot geschrieben:", args.output)
+            if args.omit_account_rankings:
+                print("Top-3-Accountdaten bewusst aus dem Snapshot entfernt.")
         else:
             print("Nur Diagnose: keine Datei geschrieben und kein Dienst geändert.")
 

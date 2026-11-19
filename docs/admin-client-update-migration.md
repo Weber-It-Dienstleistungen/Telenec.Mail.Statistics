@@ -39,23 +39,27 @@ Deshalb **einmalig dasselbe Bridge-Release 0.1.1 auf beide Feeds bringen**:
 2. Auf Windows Quellcode `main` pullen und Anwendung bauen.
 3. Urspruenglichen Velopack-`packId` und `channel` der
    produktiv installierten Version `0.1.0-test.3` aus deren
-   `sq.version` oder der bisherigen `releases.win.json` pruefen.
+   `sq.version` oder der bisherigen `releases.<channel>.json` pruefen.
+   Aus frueheren Releases ist `releases.test.json` bekannt: daher
+   ist `test` voraussichtlich der bisherige Channel. Vor dem
+   Paketieren mit der installierten Version verifizieren.
    **Nicht aus dem C#-Projektnamen erraten.** Dieser Wert muss beim
    Paketieren unveraendert bleiben, sonst ist es keine In-Place-Migration.
 4. Client `0.1.1` packen. Der Packaging-Helper verlangt explizit
-   `-ExistingPackId`, damit die Paketidentitaet bewusst bestaetigt wird.
-5. Das neu erzeugte `releases.win.json` und die in dessen Feed
+   `-ExistingPackId` und `-ExistingChannel`, damit Paketidentitaet
+   und Updatekanal bewusst bestaetigt werden.
+5. Das neu erzeugte `releases.<channel>.json` und die in dessen Feed
    referenzierten `*-full.nupkg` zunaechst auf den Telenec-HTTPS-Host
    laden. Setup.exe kann fuer Neuinstallation dort liegen.
    Die Full-Packages **vor** der Indexdatei hochladen.
 6. Von einem Windows-Rechner pruefen, dass
-   `https://dav.necnet.de/updates/statistics-admin/releases.win.json`
+   `https://dav.necnet.de/updates/statistics-admin/releases.<channel>.json`
    mit HTTP 200, gueltigem JSON und dem erwarteten PackId antwortet.
    Download eines vollstaendigen Pakets testen, nicht bloss HTTP HEAD.
 7. Erst **danach** dasselbe `0.1.1`-Release als letztes
    GitHub-Release auf
    `Weber-It-Dienstleistungen/Telenec.Mail.Statistics` veroeffentlichen.
-   Dieses GitHub-Release muss den bisherigen Windows-`win`-Kanal
+   Dieses GitHub-Release muss den bisherigen Velopack-Kanal
    bedienen und tatsaechlich **published** statt draft sein.
 8. Den alten Client `0.1.0-test.3` starten. Er laedt das Bridge-Release
    noch von GitHub. Danach ist die installierte Anwendung `0.1.1`,
@@ -98,7 +102,7 @@ Setup/Update-Paket unter:
 publish/statistics-admin-releases/0.1.1/
 ```
 
-Vor dem Hochladen: `releases.win.json` oeffnen, die referenzierten
+Vor dem Hochladen: `releases.<channel>.json` oeffnen, die referenzierten
 Dateien pruefen und Paketidentitaet gegen bestehende Installation
 vergleichen. **Keine Artefakte einer anderen App oder eines anderen
 Channels in den Feed mischen.**
@@ -133,7 +137,7 @@ privaten Schluessel oder Admin-Tokens in dieses Verzeichnis kopieren.
 ## Beispiel fuer HTTP-Test von Windows
 
 ```powershell
-Invoke-RestMethod "https://dav.necnet.de/updates/statistics-admin/releases.win.json" | Select-Object -ExpandProperty Assets | Select-Object PackageId, Version, FileName
+Invoke-RestMethod "https://dav.necnet.de/updates/statistics-admin/releases.test.json" | Select-Object -ExpandProperty Assets | Select-Object PackageId, Version, FileName
 ```
 
 Falls die Feed-Felder abweichen, Rohformat pruefen. Danach mit

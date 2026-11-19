@@ -133,9 +133,13 @@ public sealed partial class MainWindowViewModel
             MailTrafficTopRecipients =
                 CreateRanking(response.TopRecipients);
 
+            // Der letzte stündliche Balken ist noch im Aufbau.
+            // Deshalb keine zukünftige Uhrzeit als bereits
+            // abgeschlossenen Auswertungszeitraum ausgeben.
             MailTrafficPeriodText =
                 $"{response.WindowStartUtc.ToLocalTime():dd.MM. HH:mm} – " +
-                $"{response.WindowEndUtc.ToLocalTime():dd.MM. HH:mm} Uhr";
+                $"{response.GeneratedAtUtc?.ToLocalTime():dd.MM. HH:mm} Uhr " +
+                "(aktuelle Stunde läuft)";
 
             MailTrafficDataAgeText =
                 response.GeneratedAtUtc.HasValue

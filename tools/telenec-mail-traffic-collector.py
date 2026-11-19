@@ -163,6 +163,9 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     parsed_lines = 0
     relevant_lines = 0
     sasl_events = 0
+    sasl_client_events = 0
+    sasl_other_events = 0
+    accepted_sasl_queue_ids = set()
     qmgr_events = 0
     qmgr_matching_pattern = 0
     sasl_queue_ids = set()
@@ -195,14 +198,23 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
             if process == "smtpd" and "sasl_username=" in details:
                 sasl_events += 1
                 sasl_queue_ids.add(qid)
-                sasl = SASL.search(details)
-                if sasl:
-                    account = normalize_account(sasl.group("account"))
-                    if account is not None:
-                        previous = submissions.get(qid)
-                        if previous is None or at < previous[0]:
-                            submissions[qid] = (at, account)
-                        relevant_lines += 1
+                # Eine Queue-ID allein belegt keine angenommene Nachricht.
+                # Nur SMTPD-Ereignisse in der Form "ID: client=...,
+                # sasl_username=..." als Versandkandidaten betrachten.
+                # Andere SASL-Meldungen werden ausschliesslich diagnostiziert.
+                if details.startswith("client="):
+                    sasl_client_events += 1
+                    accepted_sasl_queue_ids.add(qid)
+                    sasl = SASL.search(details)
+                    if sasl:
+                        account = normalize_account(sasl.group("account"))
+                        if account is not None:
+                            previous = submissions.get(qid)
+                            if previous is None or at < previous[0]:
+                                submissions[qid] = (at, account)
+                            relevant_lines += 1
+                else:
+                    sasl_other_events += 1
 
             elif process == "qmgr":
                 qmgr_events += 1
@@ -306,7 +318,11 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
         "unconfirmed_auth": unconfirmed_submissions,
         "submission_queue_ids": all_submissions_in_window,
         "sasl_events": sasl_events,
+        "sasl_client_events": sasl_client_events,
+        "sasl_other_events": sasl_other_events,
         "unique_sasl_queue_ids": len(sasl_queue_ids),
+        "unique_accepted_sasl_queue_ids": len(accepted_sasl_queue_ids),
+        "accepted_sasl_qmgr_overlap": len(accepted_sasl_queue_ids & queued),
         "qmgr_events": qmgr_events,
         "unique_qmgr_queue_ids": len(qmgr_queue_ids),
         "qmgr_matching_pattern": qmgr_matching_pattern,
@@ -424,6 +440,14 @@ def main() -> int:
               diagnostic["unconfirmed_auth"])
         print("SASL-Ereigniszeilen (erweiterter Zeitraum):",
               diagnostic["sasl_events"])
+        print("Davon SMTP-Annahmeereignisse (client=):",
+              diagnostic["sasl_client_events"])
+        print("Andere SASL-Zeilen (nicht als Versand gezaehlt):",
+              diagnostic["sasl_other_events"])
+        print("Eindeutige Annahme-Queue-IDs:",
+              diagnostic["unique_accepted_sasl_queue_ids"])
+        print("Annahme-Queue-IDs mit qmgr-from/size:",
+              diagnostic["accepted_sasl_qmgr_overlap"])
         print("Unterschiedliche SASL-Queue-IDs:",
               diagnostic["unique_sasl_queue_ids"])
         print("qmgr-Ereigniszeilen:", diagnostic["qmgr_events"])

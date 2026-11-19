@@ -1274,6 +1274,293 @@
 
             </TabItem>
 
+            <!-- Mail-Statistik: serverseitig aggregierte Daten der letzten 24 Stunden.
+                 Nicht verfügbare Daten werden NICHT als null E-Mails dargestellt. -->
+            <TabItem Header="Mail-Statistik"
+                     Padding="18,9">
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+
+                    <StackPanel Margin="12,16,12,22">
+
+                        <TextBlock Text="Mail-Statistik"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryTextBrush}" />
+
+                        <TextBlock Text="Mailserver-Verkehr der letzten 24 Stunden · stündliche Aggregation"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Margin="0,3,0,14" />
+
+                        <Border CornerRadius="8"
+                                BorderBrush="#BFDBFE"
+                                BorderThickness="1"
+                                Background="#EFF6FF"
+                                Padding="12,10"
+                                Margin="0,0,0,14">
+
+                            <TextBlock Text="{Binding MailTrafficStatusText}"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       Foreground="#1D4ED8" />
+                        </Border>
+
+                        <!-- Zeitfenster und Summen -->
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.4*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ReputationCard}"
+                                    Margin="0,0,12,0">
+                                <StackPanel>
+                                    <TextBlock Text="Auswertungszeitraum"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+                                    <TextBlock Text="{Binding MailTrafficPeriodText}"
+                                               Style="{StaticResource ReputationFieldValue}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource ReputationCard}"
+                                    Margin="0,0,12,0">
+                                <StackPanel>
+                                    <TextBlock Text="Ausgehend · 24 Stunden"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+                                    <TextBlock Text="{Binding MailTrafficOutgoingTotalText}"
+                                               FontSize="26"
+                                               FontWeight="SemiBold"
+                                               Foreground="#0069B4" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource ReputationCard}">
+                                <StackPanel>
+                                    <TextBlock Text="Eingehend · 24 Stunden"
+                                               Style="{StaticResource ReputationFieldLabel}" />
+                                    <TextBlock Text="{Binding MailTrafficIncomingTotalText}"
+                                               FontSize="26"
+                                               FontWeight="SemiBold"
+                                               Foreground="#16A34A" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Stündlicher Verlauf -->
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ReputationCard}">
+                                <StackPanel>
+                                    <TextBlock Text="Ausgehende E-Mails"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource PrimaryTextBrush}" />
+                                    <TextBlock Text="{Binding MailTrafficOutgoingPeakText}"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               FontSize="12"
+                                               Margin="0,3,0,12" />
+
+                                    <ItemsControl ItemsSource="{Binding MailTrafficOutgoingBars}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Rows="1" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="1,0">
+                                                    <Grid Height="160">
+                                                        <Border Height="{Binding BarHeight}"
+                                                                VerticalAlignment="Bottom"
+                                                                Background="#0069B4"
+                                                                CornerRadius="2,2,0,0"
+                                                                ToolTip="{Binding Tooltip}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding AxisLabel}"
+                                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                                               TextAlignment="Center"
+                                                               FontSize="9"
+                                                               Margin="0,6,0,0" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Border Background="#E2E8F0"
+                                            Height="1"
+                                            Margin="0,4,0,0" />
+                                    <TextBlock Text="E-Mails je Stunde · Uhrzeit lokal"
+                                               FontSize="11"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource ReputationCard}">
+                                <StackPanel>
+                                    <TextBlock Text="Eingehende E-Mails"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource PrimaryTextBrush}" />
+                                    <TextBlock Text="{Binding MailTrafficIncomingPeakText}"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               FontSize="12"
+                                               Margin="0,3,0,12" />
+
+                                    <ItemsControl ItemsSource="{Binding MailTrafficIncomingBars}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Rows="1" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="1,0">
+                                                    <Grid Height="160">
+                                                        <Border Height="{Binding BarHeight}"
+                                                                VerticalAlignment="Bottom"
+                                                                Background="#16A34A"
+                                                                CornerRadius="2,2,0,0"
+                                                                ToolTip="{Binding Tooltip}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding AxisLabel}"
+                                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                                               TextAlignment="Center"
+                                                               FontSize="9"
+                                                               Margin="0,6,0,0" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Border Background="#E2E8F0"
+                                            Height="1"
+                                            Margin="0,4,0,0" />
+                                    <TextBlock Text="E-Mails je Stunde · Uhrzeit lokal"
+                                               FontSize="11"
+                                               Foreground="{StaticResource SecondaryTextBrush}"
+                                               Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Top 3 Accounts nach Volumen -->
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ReputationCard}">
+                                <StackPanel>
+                                    <TextBlock Text="Top 3 · versendende Accounts"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource PrimaryTextBrush}"
+                                               Margin="0,0,0,12" />
+                                    <ItemsControl ItemsSource="{Binding MailTrafficTopSenders}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,5">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="32" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="75" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Rank}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#0069B4" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Account}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Account}"
+                                                               Foreground="{StaticResource PrimaryTextBrush}"
+                                                               Margin="0,0,8,0" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding CountText}"
+                                                               TextAlignment="Right"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{StaticResource PrimaryTextBrush}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Style="{StaticResource ReputationCard}">
+                                <StackPanel>
+                                    <TextBlock Text="Top 3 · empfangende Accounts"
+                                               FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource PrimaryTextBrush}"
+                                               Margin="0,0,0,12" />
+                                    <ItemsControl ItemsSource="{Binding MailTrafficTopRecipients}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,5">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="32" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="75" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Rank}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#16A34A" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Account}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding Account}"
+                                                               Foreground="{StaticResource PrimaryTextBrush}"
+                                                               Margin="0,0,8,0" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding CountText}"
+                                                               TextAlignment="Right"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{StaticResource PrimaryTextBrush}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="{Binding MailTrafficDataAgeText}"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11" />
+
+                        <TextBlock Text="Hinweis: Ein hohes Versandvolumen ist ein Indikator für eine mögliche Störung oder einen kompromittierten Account, kein automatischer Spamnachweis. Nachrichteninhalte werden nicht angezeigt."
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"
+                                   Margin="0,6,0,0" />
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
         </TabControl>
 
     </Grid>

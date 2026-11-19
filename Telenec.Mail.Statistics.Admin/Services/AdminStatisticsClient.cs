@@ -374,4 +374,64 @@ public sealed class AdminStatisticsClient : IAdminStatisticsClient
             baseUri,
             cancellationToken);
     }
+
+    /// <summary>
+    /// Geschützter lesender Abruf der 24-Stunden-Mailverkehrsstatistik.
+    /// Der bisherige zehn-Sekunden-Timeout bleibt erhalten.
+    /// </summary>
+    public async Task<MailTrafficResponse> GetMailTrafficAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var baseUri =
+            await _baseUrlProvider.GetBaseUriAsync(cancellationToken);
+
+        var mailTrafficUri =
+            new Uri(baseUri, "api/v1/admin/mail-traffic");
+
+        var apiKey =
+            await _apiKeyProvider.GetApiKeyAsync(cancellationToken);
+
+        using var request =
+            new HttpRequestMessage(HttpMethod.Get, mailTrafficUri);
+
+        request.Headers.TryAddWithoutValidation(
+            AdminApiKeyHeaderName,
+            apiKey);
+
+        using var response =
+            await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new UnauthorizedAccessException(
+                "Der Admin-API-Schlüssel wurde vom Server abgelehnt.");
+        }
+
+        if (response.StatusCode is HttpStatusCode.NotFound
+            or HttpStatusCode.MethodNotAllowed)
+        {
+            throw new NotSupportedException(
+                "Der angesprochene Statistikserver bietet noch keine Mail-Statistik an.");
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var mailTraffic =
+            await response.Content.ReadFromJsonAsync<MailTrafficResponse>(
+                cancellationToken: cancellationToken);
+
+        if (mailTraffic is null)
+        {
+            throw new InvalidDataException(
+                "Der Mailverkehrs-Endpunkt hat kein gültiges Ergebnis geliefert.");
+        }
+
+        await _apiKeyProvider.ConfirmApiKeyAsync(apiKey, cancellationToken);
+        await _baseUrlProvider.ConfirmBaseUriAsync(baseUri, cancellationToken);
+
+        return mailTraffic;
+    }
 }

@@ -97,7 +97,9 @@ public static class MailSecurityRiskEvaluator
             var reason = level switch
             {
                 MailSecurityRiskLevel.Critical =>
-                    MailSecurityRiskReason.HighRepeatedRejections,
+                    highRejectedPeriods >= 2
+                        ? MailSecurityRiskReason.HighRepeatedRejections
+                        : MailSecurityRiskReason.ExtremeSinglePeriod,
                 MailSecurityRiskLevel.Warning =>
                     ratio.HasValue
                         ? MailSecurityRiskReason.ElevatedRejectionShare
@@ -185,7 +187,8 @@ public enum MailSecurityRiskReason
     UnusualRejectionVolume,
     ElevatedRejectionShare,
     HighRejectionsWithoutPassed,
-    HighRepeatedRejections
+    HighRepeatedRejections,
+    ExtremeSinglePeriod
 }
 
 public sealed record MailSecurityRiskFinding(

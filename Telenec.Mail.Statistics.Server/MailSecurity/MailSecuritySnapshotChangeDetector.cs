@@ -75,8 +75,6 @@ public static class MailSecuritySnapshotChangeDetector
             long passedIncrease = 0;
             long rejectedIncrease = 0;
             var changingPeriods = 0;
-            var newBaselines = 0;
-            var regressedCounters = 0;
 
             foreach (var period in account.Periods)
             {
@@ -96,22 +94,11 @@ public static class MailSecuritySnapshotChangeDetector
                     highWatermarks[key] = new MailSecurityPeriodWatermark(
                         account.Account, period.Time,
                         period.Passed, period.Rejected, snapshotAtUtc);
-                    newBaselines++;
                     continue;
                 }
 
                 var passedDelta = Increase(prior.Passed, period.Passed);
                 var rejectedDelta = Increase(prior.Rejected, period.Rejected);
-
-                if ((prior.Passed.HasValue && period.Passed.HasValue
-                        && period.Passed.Value < prior.Passed.Value)
-                    || (prior.Rejected.HasValue && period.Rejected.HasValue
-                        && period.Rejected.Value < prior.Rejected.Value))
-                {
-                    // Plesk kann einen Zaehler korrigieren oder
-                    // neu aufbauen. Das ist KEIN neuer Versand.
-                    regressedCounters++;
-                }
 
                 passedIncrease += passedDelta;
                 rejectedIncrease += rejectedDelta;

@@ -12,7 +12,7 @@ Kern:
 
 Regressionstests:
 `Telenec.Mail.Statistics.Tests/MailSecurityRiskTests.cs`
-(14 Testfaelle, ueber die bestehende Testkonsole eingebunden).
+(15 Testfaelle ab Sprint 43.2, ueber die bestehende Testkonsole eingebunden).
 
 **Keine automatische Versandsperre, keine Aenderung an Plesk-Limits,
 kein Mailversand, kein neues API, keine GUI-Aenderung.**
@@ -77,6 +77,79 @@ Die bestehenden Tests muessen gruen bleiben. Dazu kommen
 anonymisierten Vergleichsmustern: ein sehr deutlicher und
 ein mittelstarker Ablehnungsfall. Es werden **keine
 Kundenkonten oder realen Mail-Logs** in die Tests aufgenommen.
+
+## 43.2: Admin-API (auf GitHub vorbereitet)
+
+Der bestehende `AdminEndpoints`-Router enthält nun zusätzlich:
+
+`GET /api/v1/admin/mail-security/risk`
+
+Verhalten:
+
+- Nutzt **denselben `X-Admin-Key`** wie die bisherigen
+  Admin-Endpunkte. Ungültige oder fehlende Schlüssel führen
+  zu HTTP `401`, noch **vor** dem Lesen des Snapshots.
+- Liest ausschließlich den schon vorhandenen, validierten
+  `MailSecuritySnapshotReader` mit maximal 15 Minuten Alter.
+  Ein fehlender/veralteter Snapshot ergibt eine Antwort mit
+  `available: false`, `findings: []`, keinen erfundenen
+  Sicherheitsstatus.
+- Berechnet die Risikoindikatoren **nur auf Anfrage** für
+  den EINEN Snapshot; es gibt noch keinen Hintergrundjob,
+  kein Incident-Archiv, keine Benachrichtigungen und keine
+  automatischen Sperren.
+- Antwort enthält `available`, `generatedAtUtc`,
+  `evaluatedAccounts` und `findings`. Jeder Befund
+  enthält Postfachkennung, `level`, `reason`,
+  `passed`, `rejected`, `rejectedPeriods`,
+  `sendingLimitZero` sowie die nur bei vollständigen
+  Perioden verfügbare `rejectionSharePercent`.
+- `level` und `reason` werden als **Text** serialisiert
+  (z. B. `Critical`, `HighRepeatedRejections`) statt
+  als numerische Enum-Werte. Ein zusätzlicher Regressionstest
+  sichert diesen JSON-Vertrag ab.
+- Der Endpunkt setzt `Cache-Control: no-store`.
+  Accountdaten dürfen nicht durch Zwischenspeicher
+  weitergegeben werden.
+
+Beispielantwort mit ausschließlich fiktiven Testdaten:
+
+```json
+{
+  "available": true,
+  "generatedAtUtc": "2026-11-20T08:00:00+00:00",
+  "evaluatedAccounts": 1,
+  "findings": [
+    {
+      "account": "example@example.test",
+      "level": "Warning",
+      "reason": "ElevatedRejectionShare",
+      "passed": 100,
+      "rejected": 110,
+      "rejectedPeriods": 2,
+      "sendingLimitZero": false,
+      "rejectionSharePercent": 52.38
+    }
+  ]
+}
+```
+
+**Wichtig:** Der produktive Server `0.1.3` enthält diesen
+Endpunkt noch nicht. Er wird erst mit einem späteren signierten
+Serverrelease verfügbar. Der Admin-Client `0.1.2` bleibt
+unverändert. Ein grüner Build und synthetische Tests allein
+sind noch keine produktive API-Abnahme.
+
+Prüfschritt auf dem Windows-Entwicklungsrechner nach Pull:
+
+```powershell
+dotnet build .\Telenec.Mail.Statistics.slnx -c Release
+dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release
+```
+
+Erwartet sind **mindestens 109 erfolgreiche Tests**,
+einschließlich der 15 neuen Mail-Risiko-Testfälle.
+Der produktive Mailserver wird hierfür nicht berührt.
 
 ## Bevor etwas auf dem Produktivserver aktiviert wird
 

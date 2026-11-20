@@ -151,6 +151,71 @@ Erwartet sind **mindestens 109 erfolgreiche Tests**,
 einschließlich der 15 neuen Mail-Risiko-Testfälle.
 Der produktive Mailserver wird hierfür nicht berührt.
 
+## 43.3: Anzeige im Admin-Client (noch nicht veroeffentlicht)
+
+Die bestehende vierte Registerkarte `Mail-Sicherheit` erhaelt eine
+zusammenklappbare Sektion **Risikoanalyse · Beobachtungsmodus**.
+Die bisherigen Plesk-Zahlen, Accounttabellen und Details
+bleiben unveraendert.
+
+Die Risiko-Sektion zeigt im Kopf auch im eingeklappten Zustand
+einen Status; beim Aufklappen werden fuer jeden vom Server
+gemeldeten Befund angezeigt:
+
+- Schweregrad: `Beobachten`, `Warnung`, `Kritisch`
+- Account und Anzahl der abgewiesenen Versuche aus den
+  Plesk-Berichtszeilen
+- Ablehnungsanteil nur bei vollstaendigen Quellwerten
+- Kennzeichnung `Limit 0`, falls Plesk diesen Wert meldet
+- Fachliche Begruendung der Einstufung
+
+**Keine aktive Sperre, keine automatische Benachrichtigung**.
+Die Bezeichnung `Limit > 0` ist keine Garantie, dass das
+Postfach derzeit senden kann (ein geaendertes Kennwort ist
+z. B. im Snapshot nicht ersichtlich).
+
+Implementierung:
+
+- `Admin/Models/MailSecurityRiskResponse.cs`
+- `Admin/Services/IAdminStatisticsClient.cs`
+- `Admin/Services/AdminStatisticsClient.cs`
+- `Admin/ViewModels/MainWindowViewModel.MailSecurity.cs`
+- `Admin/ViewModels/MainWindowViewModel.cs`
+- `Admin/MainWindow.xaml`
+
+Jede neue Risikoabfrage ist von der alten Plesk-Abfrage
+unabhaengig. HTTP 404/405 beim neuen Endpunkt wird als
+`Risikoanalyse erst mit dem naechsten Serverupdate verfuegbar`
+gemeldet; die bisherigen Statistiken bleiben erhalten.
+`Available=false` zeigt **keine aktuellen Risikodaten**,
+nicht etwa `keine Probleme`. Andere API-/Netzwerkfehler
+werden ebenfalls nur innerhalb des Risikoabschnitts gemeldet.
+
+Die Serverantwort wird im Client auf gueltige Levels, bekannte
+Ursachen und plausible Zaehler geprueft, bevor Ergebnisse
+angezeigt werden. Der Admin-Schluessel bleibt unveraendert.
+
+### Testfreigabe
+
+Nach Pull:
+
+```powershell
+dotnet build .\Telenec.Mail.Statistics.slnx -c Release
+dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release
+```
+
+Da der produktive Statistikserver aktuell noch Version `0.1.3`
+ohne Risiko-Endpunkt ausliefert, ist im lokalen GUI-Test die
+Meldung `Risikoanalyse erst mit dem naechsten Serverupdate
+verfuegbar` zu erwarten. Kein neuer Client oder Server
+wird in diesem Sprintabschnitt automatisch ausgerollt.
+
+Erst ein spaeteres signiertes Serverrelease macht die
+Risikobefunde ueber die API produktiv abrufbar. Vor einer
+Freigabe noch API-Authentifizierung und Darstellung mit
+synthetischen Testdaten sowie Regressionsdaten aus der
+realen Umgebung kontrollieren.
+
 ## Bevor etwas auf dem Produktivserver aktiviert wird
 
 1. Fachlich die Zeitsemantik der Plesk-Berichtszeilen sowie

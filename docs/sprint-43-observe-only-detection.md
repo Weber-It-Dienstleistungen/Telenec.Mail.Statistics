@@ -216,6 +216,78 @@ Freigabe noch API-Authentifizierung und Darstellung mit
 synthetischen Testdaten sowie Regressionsdaten aus der
 realen Umgebung kontrollieren.
 
+## 43.4a: Veränderungen zwischen Snapshots (noch kein produktiver Worker)
+
+Neu:
+`Telenec.Mail.Statistics.Server/MailSecurity/MailSecuritySnapshotChangeDetector.cs`
+
+Der rein funktionale Vergleich nimmt einen validierten
+`MailSecurityOverview` und einen optionalen, serialisierbaren
+`MailSecuritySnapshotCheckpoint` entgegen. Er gibt einen neuen
+Checkpoint und nur die **positiven, nachweisbar neu beobachteten**
+Zaehlerdifferenzen zurueck.
+
+Der Schluessel fuer eine Plesk-Berichtszeile besteht aus
+`(Account, originaler Plesk-time-Text)`. Es wird **keine**
+Zeitzone geraten. Accounts werden bei der Zuordnung
+gross-/kleinschreibungsunabhaengig behandelt.
+
+**Verhalten und Sicherheitsgrenzen:**
+
+- Erster gueltiger Snapshot: Basislinie, **kein** Ereignis.
+- Neue Account-/Stundenzeile: Basislinie, **kein** Ereignis.
+  Dies kann echte fruehe Aktivitaet zunaechst unentdeckt
+  lassen. Die bereits vorhandene Bestands-Risk-Engine bleibt
+  fuer solche hohen Zahlen wichtig.
+- Bei einem bekannten Schluessel wird ausschliesslich der
+  Anstieg ueber den bisher beobachteten **Hoechststand**
+  als neue Aktivitaet gezaehlt.
+- Unveraenderte Werte: keine neue Aktivitaet.
+- Zurueckgesetzte oder abgesunkene Werte: keine kuenstliche
+  Zunahme. Bis zum Ueberschreiten des alten Hoechststands
+  wird aus Sicherheitsgruenden eher unter- als ueberzaehlt.
+- Fehlende Zaehlwerte werden niemals als 0 gewertet.
+  Ein erstmals bekannt gewordener Zaehler bekommt
+  ebenfalls erst eine Basislinie.
+- Voruebergehend verschwindende Perioden behalten
+  ihre Hoechststaende; keine Doppelzaehlung bei Rueckkehr.
+- Veraltete, gleich datierte oder ungueltige Snapshots
+  aendern einen bestehenden Checkpoint nicht.
+- Aus Platz- und Datenschutzgruenden werden Watermarks
+  **72 Stunden nach ihrer letzten Beobachtung** aus dem
+  Checkpoint entfernt. Bei erneutem Auftauchen danach
+  entsteht nur eine neue Basislinie.
+- Resultat erhaelt `SendingLimitZero`, ohne daraus
+  automatisch einen wirksamen Kontoschutz oder einen
+  aktuell laufenden Angriff abzuleiten.
+
+**Noch nicht enthalten:** SQLite-Persistenz, periodischer
+Worker, Incident-Identitaet, Incident-Abschluss,
+API-Endpoint fuer zeitliche Differenzen, Alarmversand,
+Plesk-Sperren. Bei jedem künftigen Worker muss der Checkpoint
+**atomar** gemeinsam mit neu erfassten Ereignissen gespeichert
+werden, damit ein Neustart nicht erneut zaehlt.
+
+Neu:
+`Telenec.Mail.Statistics.Tests/MailSecuritySnapshotChangeTests.cs`
+
+11 Regressionstests pruefen Basislinie, Wiederholung,
+steigende Werte, neue Stunde, Ruecksetzung, Rueckkehr
+verschwundener Perioden, fehlende Werte, Snapshot-Reihenfolge,
+Datenluecke, JSON-Checkpoint-Neustart/72h-Verfall sowie
+Account-Schreibweise und Versandlimit 0.
+
+Nach GitHub Pull:
+
+```powershell
+dotnet build .\Telenec.Mail.Statistics.slnx -c Release
+dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release
+```
+
+Erwartung: **120 erfolgreiche Tests**, wenn alle zuvor
+109 Tests weiterhin bestehen und die 11 neuen erfolgreich
+laufen. Noch keine Produktiv-Aktualisierung oder GUI-Aenderung.
+
 ## Bevor etwas auf dem Produktivserver aktiviert wird
 
 1. Fachlich die Zeitsemantik der Plesk-Berichtszeilen sowie

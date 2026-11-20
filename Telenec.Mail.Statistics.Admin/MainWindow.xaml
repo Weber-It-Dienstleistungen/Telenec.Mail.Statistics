@@ -1571,6 +1571,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
@@ -1643,7 +1644,72 @@
                         </Border>
                     </Grid>
 
-                    <Grid Grid.Row="3" MinHeight="240">
+                    <!-- Sprint 43.3: optionale Risikoauswertung aus dem geschuetzten Server-API. -->
+                    <!-- Im alten Server 0.1.3 bleibt dieser Abschnitt ohne Daten. -->
+                    <Border Grid.Row="3"
+                            Style="{StaticResource ReputationCard}"
+                            Margin="0,0,0,12">
+                        <Expander IsExpanded="False">
+                            <Expander.Header>
+                                <StackPanel>
+                                    <TextBlock Text="Risikoanalyse · Beobachtungsmodus"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource PrimaryTextBrush}" />
+                                    <TextBlock Text="{Binding MailSecurityRiskStatusText}"
+                                               FontSize="12"
+                                               Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource SecondaryTextBrush}" />
+                                </StackPanel>
+                            </Expander.Header>
+
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Text="Vorläufige Indikatoren aus Plesk-Berichtszeilen – kein Spamnachweis, keine automatische Sperre."
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"
+                                           Foreground="{StaticResource SecondaryTextBrush}" />
+
+                                <DataGrid ItemsSource="{Binding MailSecurityRiskFindings}"
+                                          MaxHeight="190"
+                                          MinHeight="85"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          HeadersVisibility="Column"
+                                          RowHeaderWidth="0"
+                                          GridLinesVisibility="Horizontal"
+                                          BorderThickness="0"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="STUFE"
+                                                            Binding="{Binding SeverityText}"
+                                                            Width="90" />
+                                        <DataGridTextColumn Header="ACCOUNT"
+                                                            Binding="{Binding Account}"
+                                                            Width="2*" />
+                                        <DataGridTextColumn Header="ABGEWIESEN"
+                                                            Binding="{Binding RejectedText}"
+                                                            Width="100" />
+                                        <DataGridTextColumn Header="QUOTE"
+                                                            Binding="{Binding RejectionShareText}"
+                                                            Width="85" />
+                                        <DataGridTextColumn Header="LIMIT"
+                                                            Binding="{Binding LimitStatusText}"
+                                                            Width="90" />
+                                        <DataGridTextColumn Header="BEGRÜNDUNG"
+                                                            Binding="{Binding Explanation}"
+                                                            Width="2*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Expander>
+                    </Border>
+
+                    <Grid Grid.Row="4" MinHeight="240">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="1.7*" />
                             <ColumnDefinition Width="14" />
@@ -1774,7 +1840,7 @@
                         </Border>
                     </Grid>
 
-                    <StackPanel Grid.Row="4" Margin="0,12,0,0">
+                    <StackPanel Grid.Row="5" Margin="0,12,0,0">
                         <TextBlock Text="{Binding MailSecurityDataAgeText}"
                                    FontSize="11"
                                    Foreground="{StaticResource SecondaryTextBrush}" />

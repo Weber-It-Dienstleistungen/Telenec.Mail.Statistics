@@ -151,6 +151,8 @@ internal static class MailSecurityRiskTests
 
         Assert(finding.Level == MailSecurityRiskLevel.Critical,
             "Extrem hohe Einzelperioden muessen erkennbar bleiben.");
+        Assert(finding.Reason == MailSecurityRiskReason.ExtremeSinglePeriod,
+            "Eine einzelne Stunde darf nicht als wiederholt bezeichnet werden.");
         return Task.CompletedTask;
     }
 

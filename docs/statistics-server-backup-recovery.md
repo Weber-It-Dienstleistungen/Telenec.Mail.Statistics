@@ -39,6 +39,37 @@ Die Online-Backup-API erlaubt eine konsistente Sicherung, auch wenn
 die Anwendung die Datenbank nutzt (inklusive WAL).
 Es werden weder Mailkonten manipuliert noch Dienste neugestartet.
 
+## Sprint 42.1: systemd-Sandbox / SQLite-WAL
+
+Der erste manuelle Test als `telenecstats` mit `runuser` am
+20.11.2026 hat erfolgreich eine SQLite-Sicherung mit
+`PRAGMA integrity_check=ok` erzeugt. Unter dem systemd-Oneshot
+scheiterte derselbe Worker dagegen mit
+`unable to open database file` bzw. einem Schreibschutzfehler.
+
+Die wahrscheinliche Ursache ist die Mount-Sandbox:
+`ProtectSystem=strict` mit dem urspruenglichen
+`ReadOnlyPaths=/var/lib/telenec-mail-statistics`.
+SQLite-WAL-Reader koennen trotz `mode=ro` Schreibzugriff
+auf das Datenbankverzeichnis benoetigen, um `-shm`- und
+`-wal`-Sidecars zu verwalten.
+
+Korrektur am systemd-Dienst in
+`tools/Install-StatisticsDatabaseBackup.sh`:
+
+- `ReadWritePaths=/var/lib/telenec-mail-statistics /var/backups/telenec-mail-statistics`
+- `ReadOnlyPaths=/var/lib/telenec-mail-statistics/telenec-mail-statistics.db`
+- Die Python-Quelle oeffnet die Hauptdatenbank **weiterhin
+  ausdruecklich nur lesend** via `mode=ro`.
+- Die separate Datenbanksicherungsdatei wird ausschliesslich
+  im geschuetzten Backupziel angelegt.
+- **Die Schutzanpassung ist noch nicht produktiv nachgetestet.**
+  Den Backup-Timer erst nach erfolgreichem Oneshot einschalten.
+
+Der Installer kann nach einem erneuten Download erneut ausgefuehrt
+werden; er schreibt nur die beiden eigenen Units und laesst
+bereits vorhandene Backupdateien bestehen.
+
 ## Installation auf Ubuntu – nur nach Freigabe
 
 Alle folgenden Befehle als root; vor der Installation Quellskripte

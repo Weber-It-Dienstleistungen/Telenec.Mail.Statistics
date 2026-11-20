@@ -55,6 +55,14 @@ public static class MailSecuritySnapshotChangeDetector
 
         foreach (var watermark in initial.Watermarks)
         {
+            // Nach einer Datenluecke zuerst veraltete Watermarks
+            // entfernen. Ein nach >72h erstmals wieder gesehenes
+            // Konto beginnt als Basislinie, nicht als Zuwachs.
+            if (watermark.LastSeenAtUtc < cutoff)
+            {
+                continue;
+            }
+
             // Zuvor gespeicherte Daten werden nur ueber die
             // autorisierte Historisierung geliefert. Ungueltige
             // Duplikate sollen nicht stillschweigend ueberschreiben.

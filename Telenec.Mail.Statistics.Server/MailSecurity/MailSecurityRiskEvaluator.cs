@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Telenec.Mail.Statistics.Server.MailSecurity;
 
 /// <summary>
@@ -174,6 +176,7 @@ public static class MailSecurityRiskEvaluator
     }
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<MailSecurityRiskLevel>))]
 public enum MailSecurityRiskLevel
 {
     None = 0,
@@ -182,6 +185,7 @@ public enum MailSecurityRiskLevel
     Critical = 3
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<MailSecurityRiskReason>))]
 public enum MailSecurityRiskReason
 {
     UnusualRejectionVolume,

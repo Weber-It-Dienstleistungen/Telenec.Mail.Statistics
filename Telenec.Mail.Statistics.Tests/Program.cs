@@ -822,6 +822,8 @@ internal static class Program
             MailSecurityRiskTests.BlockedAccountIsStillHistoricalAsync);
         await Test("Fehlende Passed-Werte nicht als 0 behandeln",
             MailSecurityRiskTests.MissingPassedIsNotZeroAsync);
+        await Test("Teilweise fehlende Stundenwerte: keine falsche Quote",
+            MailSecurityRiskTests.PartialPeriodsHaveNoReliableRatioAsync);
         await Test("Fehlende Rejected-Werte nicht erfinden",
             MailSecurityRiskTests.MissingRejectedIsNotZeroAsync);
         await Test("Einzelstunde ist keine wiederholte Evidenz",

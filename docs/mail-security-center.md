@@ -93,8 +93,10 @@ erneuern die Dateien alle fuenf Minuten:
 - `telenec-mail-traffic-snapshot.service/.timer` liest die Postfix-Logs
   und schreibt `mail-traffic-preview.json` **ohne** Top-3-Accountnamen
   und -Zaehler. Datei: `root:telenecstats`, Modus `0640`.
-  Die Option `--omit-account-rankings` ist fuer den automatischen
-  Collector zwingend. Die 24 Stundenbalken bleiben erhalten.
+  Die Option `--omit-account-rankings` ist fuer die anonyme
+  Standardkonfiguration des automatischen Collectors gesetzt.
+  Die 24 Stundenbalken bleiben erhalten. Die getrennte,
+  ausdrueckliche Freigabe der Rankings erfolgt erst ab Sprint 41.
 
 Die Dienste laufen mit Root-Rechten, weil die Plesk-Systemschnittstelle
 und Postfix-Protokolle privilegierten Zugriff benoetigen. Sie rufen
@@ -128,6 +130,23 @@ die aktuellen Dateien vom Statistikserver.
 Bei Fehlschlag bleibt die letzte gute Datei stehen. Nach 15 Minuten
 kennzeichnen beide Server-Reader deren Inhalt als veraltet, statt
 den Eindruck frischer Messdaten zu erwecken.
+
+### Sprint 41: gezielt freischaltbare Top-3-Accounts
+
+`tools/Configure-MailTrafficRankings.sh` erlaubt nach gesonderter
+Datenschutz-/Berechtigungspruefung die gezielte Aktivierung der schon
+implementierten `topSenders`- und `topRecipients`-Felder. Das Script
+schreibt ein von der anonymen Standard-Unit getrenntes systemd-Drop-In,
+ruft den unveraenderten Traffic-Collector ohne
+`--omit-account-rankings` auf und ersetzt einen Snapshot.
+
+Die beiden Timer bleiben unveraendert, ebenso die Sicherheitsansicht
+und ihr Plesk-Collector. Das Drop-In bleibt auch bei erneuter
+Ausfuehrung des bisherigen Snapshot-Installers erhalten.
+Mit `--disable` wird es wieder entfernt und die Datei
+ohne Rankings erneuert. Die ergaenzte technische und
+datenschutzrechtliche Checkliste liegt in
+`docs/release-0.1.2-data-sources.md`.
 
 ### Noch NICHT implementiert
 

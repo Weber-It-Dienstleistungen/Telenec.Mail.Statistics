@@ -841,6 +841,37 @@ internal static class Program
         await Test("Risiko-API: lesbare JSON-Kennungen",
             MailSecurityRiskTests.ApiEnumsSerializeAsNamesAsync);
 
+        // ================================================
+        // Sprint 43.4a - Snapshot-Vergleich (ohne Persistenz)
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4a (Differenzen)");
+        Console.WriteLine();
+
+        await Test("Erste Beobachtung ist nur Basislinie",
+            MailSecuritySnapshotChangeTests.FirstSnapshotOnlySeedsBaselineAsync);
+        await Test("Wiederholter Poll zaehlt nicht doppelt",
+            MailSecuritySnapshotChangeTests.RepeatedFiveMinutePollIsNotNewActivityAsync);
+        await Test("Zuwachs exakt einmal erkannt",
+            MailSecuritySnapshotChangeTests.RisingHourlyCounterDetectedExactlyOnceAsync);
+        await Test("Neue Plesk-Stunde wird als Ausgangsstand erkannt",
+            MailSecuritySnapshotChangeTests.NewlyAppearingHourIsOnlyNewBaselineAsync);
+        await Test("Zaehler-Ruecksetzung erzeugt keinen Fehlalarm",
+            MailSecuritySnapshotChangeTests.RollbackNeverProducesArtificialIncreaseAsync);
+        await Test("Verschwundene Stunde doppelt nichts auf",
+            MailSecuritySnapshotChangeTests.MissingHourThenReturningMustNotDoubleCountAsync);
+        await Test("Unbekannte Zaehler werden nicht zu Null",
+            MailSecuritySnapshotChangeTests.UnknownCounterNeverTreatedAsZeroAsync);
+        await Test("Alte oder identische Snapshotzeit wird ignoriert",
+            MailSecuritySnapshotChangeTests.OlderAndEqualTimestampMustNotChangeCheckpointAsync);
+        await Test("Fehlender Snapshot loescht Checkpoint nicht",
+            MailSecuritySnapshotChangeTests.UnavailableNeverClearsWatermarksAsync);
+        await Test("Checkpoint serialisierbar, Aufbewahrung begrenzt",
+            MailSecuritySnapshotChangeTests.CheckpointSurvivesSerializationAndExpiresAsync);
+        await Test("Account-Schreibweise und Limit 0 beruecksichtigt",
+            MailSecuritySnapshotChangeTests.CaseInsensitiveAccountAndLimitZeroAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

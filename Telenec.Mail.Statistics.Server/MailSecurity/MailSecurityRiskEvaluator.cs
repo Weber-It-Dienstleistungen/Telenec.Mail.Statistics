@@ -59,7 +59,17 @@ public static class MailSecurityRiskEvaluator
 
             var rejected = account.Rejected.Value;
             var passed = account.Passed;
-            var ratio = passed.HasValue
+
+            // Plesk liefert teils unvollstaendige Zeilen. Die
+            // Gesamtsumme Passed kann in diesem Fall trotzdem nur
+            // die bekannten Zeilen enthalten. Eine vermeintliche
+            // Quote waere daher fachlich nicht belastbar.
+            var completePeriodPairs = account.Periods.Count > 0
+                && account.Periods.All(period =>
+                    period.Passed.HasValue
+                    && period.Rejected.HasValue);
+
+            var ratio = passed.HasValue && completePeriodPairs
                 ? (double)rejected / ((long)passed.Value + rejected)
                 : (double?)null;
 

@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 # Ein altes releases.test.json ist NICHT releases.win.json.
 # Dieses Skript stellt nichts online und veraendert keine Installation.
 
-$Version = '0.1.1'
+$Version = '0.1.2'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $Project = Join-Path $RepoRoot 'Telenec.Mail.Statistics.Admin\Telenec.Mail.Statistics.Admin.csproj'
 $PublishDir = Join-Path $RepoRoot 'publish\statistics-admin\win-x64'

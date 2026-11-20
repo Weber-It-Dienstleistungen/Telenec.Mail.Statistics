@@ -72,4 +72,12 @@ public interface IAdminStatisticsClient
     /// </summary>
     Task<MailSecurityResponse> GetMailSecurityAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Beobachtende Risikobewertung des Plesk-Snapshots.
+    /// Nur lesend, geschuetzt mit dem bestehenden X-Admin-Key.
+    /// Auf Servern vor Sprint 43.2 bewusst nicht verfuegbar.
+    /// </summary>
+    Task<MailSecurityRiskResponse> GetMailSecurityRiskAsync(
+        CancellationToken cancellationToken = default);
 }

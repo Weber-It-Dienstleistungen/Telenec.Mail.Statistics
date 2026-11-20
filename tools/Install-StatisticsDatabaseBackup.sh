@@ -79,8 +79,13 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadOnlyPaths=/var/lib/telenec-mail-statistics
-ReadWritePaths=$BACKUP_DIR
+# Die SQLite-Live-Datenbank kann WAL/-shm-Sidecars benutzen, die auch
+# bei einer nur lesenden Online-Backup-Verbindung Schreibzugriff auf
+# das VERZEICHNIS benoetigen. Die eigentliche DB bleibt separat ro.
+# Nur die beiden expliziten Verzeichnisse sind im sonst ro-Dateisystem
+# beschreibbar. Der Backup-Worker oeffnet SOURCE stets mit mode=ro.
+ReadWritePaths=/var/lib/telenec-mail-statistics $BACKUP_DIR
+ReadOnlyPaths=$DB
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

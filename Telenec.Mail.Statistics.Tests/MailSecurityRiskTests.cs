@@ -233,9 +233,8 @@ internal static class MailSecurityRiskTests
             "API muss eindeutige, lesbare Risikostufen ausgeben.");
         Assert(json.Contains("\\"reason\\":\\"HighRepeatedRejections\\"", StringComparison.Ordinal),
             "API muss Ursachen als stabil lesbare Kennungen liefern.");
-        Assert(!json.Contains("sample@example.test", StringComparison.OrdinalIgnoreCase)
-               == false,
-            "Testfall muss personenbezogene Werte nur im geschuetzten Ergebnis enthalten.");
+        Assert(json.Contains("sample@example.test", StringComparison.OrdinalIgnoreCase),
+            "Accountkennung muss zur spaeteren autorisierten Vorfallzuordnung erhalten bleiben.");
 
         return Task.CompletedTask;
     }

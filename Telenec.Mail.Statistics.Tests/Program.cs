@@ -869,6 +869,8 @@ internal static class Program
             MailSecuritySnapshotChangeTests.UnavailableNeverClearsWatermarksAsync);
         await Test("Checkpoint serialisierbar, Aufbewahrung begrenzt",
             MailSecuritySnapshotChangeTests.CheckpointSurvivesSerializationAndExpiresAsync);
+        await Test("Rückkehr nach 72h nur als neue Basislinie",
+            MailSecuritySnapshotChangeTests.DirectReturnAfterRetentionIsOnlyBaselineAsync);
         await Test("Account-Schreibweise und Limit 0 beruecksichtigt",
             MailSecuritySnapshotChangeTests.CaseInsensitiveAccountAndLimitZeroAsync);
 

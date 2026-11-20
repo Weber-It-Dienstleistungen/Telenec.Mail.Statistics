@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Telenec.Mail.Statistics.Server.MailSecurity;
 
 namespace Telenec.Mail.Statistics.Tests;
@@ -214,6 +215,28 @@ internal static class MailSecurityRiskTests
         Assert(report.Findings[0].Level == MailSecurityRiskLevel.Critical
                && report.Findings[1].Level == MailSecurityRiskLevel.Warning,
             "Kritische Auffaelligkeiten muessen zuerst erscheinen.");
+        return Task.CompletedTask;
+    }
+
+    public static Task ApiEnumsSerializeAsNamesAsync()
+    {
+        var report = MailSecurityRiskEvaluator.Evaluate(
+            Snapshot(Account(
+                "sample@example.test", 150,
+                Period("2026-11-20 05", 150, 245),
+                Period("2026-11-20 06", 150, 285))));
+
+        var json = JsonSerializer.Serialize(
+            report, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert(json.Contains("\\"level\\":\\"Critical\\"", StringComparison.Ordinal),
+            "API muss eindeutige, lesbare Risikostufen ausgeben.");
+        Assert(json.Contains("\\"reason\\":\\"HighRepeatedRejections\\"", StringComparison.Ordinal),
+            "API muss Ursachen als stabil lesbare Kennungen liefern.");
+        Assert(!json.Contains("sample@example.test", StringComparison.OrdinalIgnoreCase)
+               == false,
+            "Testfall muss personenbezogene Werte nur im geschuetzten Ergebnis enthalten.");
+
         return Task.CompletedTask;
     }
 

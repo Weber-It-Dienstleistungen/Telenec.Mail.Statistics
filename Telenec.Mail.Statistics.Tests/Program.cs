@@ -838,6 +838,8 @@ internal static class Program
             MailSecurityRiskTests.UnavailableSnapshotIsNotNormalTrafficAsync);
         await Test("Schweregrad sortiert Ergebnisse stabil",
             MailSecurityRiskTests.DeterministicPriorityOrderingAsync);
+        await Test("Risiko-API: lesbare JSON-Kennungen",
+            MailSecurityRiskTests.ApiEnumsSerializeAsNamesAsync);
 
         Console.WriteLine();
         Console.WriteLine(

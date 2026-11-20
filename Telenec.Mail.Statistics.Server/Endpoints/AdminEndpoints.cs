@@ -55,6 +55,17 @@ public static class AdminEndpoints
             HandleMailSecurityAsync);
 
         /*
+         * Sprint 43.2: Beobachtende Sicherheitsauswertung.
+         * Dieselbe geschuetzte Plesk-Snapshotquelle, keine
+         * Postfach-Aktionen, kein historisches Aufsummieren.
+         * Auch bei fehlenden/veralteten Daten HTTP 200 mit
+         * Available=false statt irrefuehrender Entwarnung.
+         */
+        endpoints.MapGet(
+            "/api/v1/admin/mail-security/risk",
+            HandleMailSecurityRiskAsync);
+
+        /*
          * Geschützter manueller Prüfauslöser.
          *
          * Nur POST startet externe Abfragen.
@@ -128,6 +139,36 @@ public static class AdminEndpoints
 
         var data = await reader.ReadAsync(cancellationToken);
         return Results.Ok(data);
+    }
+
+    /// <summary>
+    /// Sprint 43.2: Autorisierte, ausschliesslich lesende
+    /// Risikoanalyse des zuletzt vorhandenen Plesk-Snapshots.
+    /// Es werden keine Plesk-Kommandos oder Mailaktionen ausgefuehrt.
+    /// Ohne frischen Snapshot wird explizit Available=false geliefert.
+    /// </summary>
+    private static async Task<IResult> HandleMailSecurityRiskAsync(
+        HttpRequest request,
+        IAdminApiKeyValidator apiKeyValidator,
+        MailSecuritySnapshotReader reader,
+        CancellationToken cancellationToken)
+    {
+        var providedApiKey =
+            request.Headers[AdminApiKeyHeaderName].FirstOrDefault();
+
+        if (!apiKeyValidator.IsValid(providedApiKey))
+        {
+            return Results.Unauthorized();
+        }
+
+        // Personenbeziehbare Kontonamen duerfen nicht in
+        // Browser-/Proxy-Zwischenspeichern verbleiben.
+        request.HttpContext.Response.Headers.CacheControl = "no-store";
+
+        var snapshot = await reader.ReadAsync(cancellationToken);
+        var report = MailSecurityRiskEvaluator.Evaluate(snapshot);
+
+        return Results.Ok(report);
     }
 
     /// <summary>

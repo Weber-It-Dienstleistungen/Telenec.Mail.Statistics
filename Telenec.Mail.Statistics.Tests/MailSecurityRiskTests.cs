@@ -97,6 +97,29 @@ internal static class MailSecurityRiskTests
         return Task.CompletedTask;
     }
 
+    public static Task PartialPeriodsHaveNoReliableRatioAsync()
+    {
+        // Plesk summiert bekannte Passed-Werte auch dann, wenn
+        // andere Zeitzeilen keinen Passed-Wert enthalten.
+        // Daraus darf keine scheinbar praezise Quote entstehen.
+        var account = new MailSecurityAccount(
+            "partial@example.test", 150, 40, 120,
+            new[]
+            {
+                Period("2026-11-20 06", 40, 20),
+                Period("2026-11-20 07", null, 100)
+            });
+
+        var finding = Classify(account);
+        Assert(finding.Level == MailSecurityRiskLevel.Warning,
+            "Bei unvollstaendigen Zeilen nur Warnung statt Quoten-Eskalation.");
+        Assert(finding.RejectionSharePercent is null,
+            "Unvollstaendige Stundenwerte erlauben keine sichere Quote.");
+        Assert(finding.Reason == MailSecurityRiskReason.HighRejectionsWithoutPassed,
+            "Die Unsicherheit muss als eigene Ursache erkennbar sein.");
+        return Task.CompletedTask;
+    }
+
     public static Task MissingRejectedIsNotZeroAsync()
     {
         var report = MailSecurityRiskEvaluator.Evaluate(

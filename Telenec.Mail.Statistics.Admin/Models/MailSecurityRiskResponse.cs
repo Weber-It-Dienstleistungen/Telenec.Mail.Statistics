@@ -46,8 +46,10 @@ public sealed record MailSecurityRiskRow(
     public string AllowedText => Passed?.ToString("N0") ?? "—";
     public string RejectedText => Rejected.ToString("N0");
     public string RejectionShareText =>
-        RejectionSharePercent?.ToString("N1") + " %" ?? "—";
+        RejectionSharePercent.HasValue
+            ? RejectionSharePercent.Value.ToString("N1") + " %"
+            : "—";
 
     public string LimitStatusText =>
-        SendingLimitZero ? "Limit 0" : "Nicht gesperrt (Limit > 0)";
+        SendingLimitZero ? "Limit 0" : "Limit > 0";
 }

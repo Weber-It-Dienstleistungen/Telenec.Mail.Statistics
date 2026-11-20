@@ -802,6 +802,41 @@ internal static class Program
             "DroneBL aktiv, SpamCop weiterhin inaktiv",
             CheckSprint307DroneBlIsolationAsync);
 
+        // ================================================
+        // Sprint 43.1 - Beobachtende Mail-Security-Risikoanalyse
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.1 (nur Beobachtung)");
+        Console.WriteLine();
+
+        await Test("Wiederholte hohe Ablehnungen: kritisch",
+            MailSecurityRiskTests.StrongRepeatedRejectionsAsync);
+        await Test("Erhoehte Ablehnungen: Warnung",
+            MailSecurityRiskTests.ElevatedRejectionsAsync);
+        await Test("Normaler Versand: keine Auffaelligkeit",
+            MailSecurityRiskTests.NormalMailTrafficAsync);
+        await Test("Hohes Volumen, niedrige Ablehnungsquote",
+            MailSecurityRiskTests.HighVolumeLowRatioAsync);
+        await Test("Limit 0: historische Daten gesondert markieren",
+            MailSecurityRiskTests.BlockedAccountIsStillHistoricalAsync);
+        await Test("Fehlende Passed-Werte nicht als 0 behandeln",
+            MailSecurityRiskTests.MissingPassedIsNotZeroAsync);
+        await Test("Fehlende Rejected-Werte nicht erfinden",
+            MailSecurityRiskTests.MissingRejectedIsNotZeroAsync);
+        await Test("Einzelstunde ist keine wiederholte Evidenz",
+            MailSecurityRiskTests.SingleHourIsNotRepeatedEvidenceAsync);
+        await Test("Extreme Einzelperiode bleibt kritisch",
+            MailSecurityRiskTests.ExtremeSingleHourIsCriticalAsync);
+        await Test("Kleines Signal bleibt Beobachtung",
+            MailSecurityRiskTests.LowLevelObservationAsync);
+        await Test("Wiederholtes Polling zaehlt nicht doppelt",
+            MailSecurityRiskTests.RepeatedPollIsIdempotentAsync);
+        await Test("Veralteter Snapshot ist kein Entwarnungsbefund",
+            MailSecurityRiskTests.UnavailableSnapshotIsNotNormalTrafficAsync);
+        await Test("Schweregrad sortiert Ergebnisse stabil",
+            MailSecurityRiskTests.DeterministicPriorityOrderingAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

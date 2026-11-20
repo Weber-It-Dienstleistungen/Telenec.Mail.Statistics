@@ -218,6 +218,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // Vierter Bereich: optionale Plesk-Sicherheitsdaten.
         // Keine schreibenden Plesk-Aktionen oder Sperren.
         await LoadMailSecurityAsync(cancellationToken);
+
+        // Optionaler, nur lesender Risikobericht. Auf alten Servern
+        // wird nur die Risikoanzeige als nicht verfuegbar markiert.
+        await LoadMailSecurityRiskAsync(cancellationToken);
     }
 
     // Der Server-Check und das Laden seiner Ergebnisse

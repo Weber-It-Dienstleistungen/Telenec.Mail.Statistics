@@ -229,9 +229,9 @@ internal static class MailSecurityRiskTests
         var json = JsonSerializer.Serialize(
             report, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert(json.Contains("\\"level\\":\\"Critical\\"", StringComparison.Ordinal),
+        Assert(json.Contains("\"level\":\"Critical\"", StringComparison.Ordinal),
             "API muss eindeutige, lesbare Risikostufen ausgeben.");
-        Assert(json.Contains("\\"reason\\":\\"HighRepeatedRejections\\"", StringComparison.Ordinal),
+        Assert(json.Contains("\"reason\":\"HighRepeatedRejections\"", StringComparison.Ordinal),
             "API muss Ursachen als stabil lesbare Kennungen liefern.");
         Assert(json.Contains("sample@example.test", StringComparison.OrdinalIgnoreCase),
             "Accountkennung muss zur spaeteren autorisierten Vorfallzuordnung erhalten bleiben.");

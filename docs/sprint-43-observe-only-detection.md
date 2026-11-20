@@ -271,11 +271,12 @@ werden, damit ein Neustart nicht erneut zaehlt.
 Neu:
 `Telenec.Mail.Statistics.Tests/MailSecuritySnapshotChangeTests.cs`
 
-11 Regressionstests pruefen Basislinie, Wiederholung,
+12 Regressionstests pruefen Basislinie, Wiederholung,
 steigende Werte, neue Stunde, Ruecksetzung, Rueckkehr
 verschwundener Perioden, fehlende Werte, Snapshot-Reihenfolge,
 Datenluecke, JSON-Checkpoint-Neustart/72h-Verfall sowie
-Account-Schreibweise und Versandlimit 0.
+Account-Schreibweise und Versandlimit 0 sowie unmittelbare
+Rueckkehr nach mehr als 72 Stunden ohne Zwischenpolling.
 
 Nach GitHub Pull:
 
@@ -284,8 +285,8 @@ dotnet build .\Telenec.Mail.Statistics.slnx -c Release
 dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release
 ```
 
-Erwartung: **120 erfolgreiche Tests**, wenn alle zuvor
-109 Tests weiterhin bestehen und die 11 neuen erfolgreich
+Erwartung: **121 erfolgreiche Tests**, wenn alle zuvor
+109 Tests weiterhin bestehen und die 12 neuen erfolgreich
 laufen. Noch keine Produktiv-Aktualisierung oder GUI-Aenderung.
 
 ## Bevor etwas auf dem Produktivserver aktiviert wird

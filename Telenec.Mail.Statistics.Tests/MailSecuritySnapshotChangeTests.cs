@@ -186,6 +186,27 @@ internal static class MailSecuritySnapshotChangeTests
         return Task.CompletedTask;
     }
 
+    public static Task DirectReturnAfterRetentionIsOnlyBaselineAsync()
+    {
+        var baseline = Compare(null, 0,
+            Account("one@example.test", 150, Hour("2026-11-20 08", 10, 100)));
+
+        // 73 Stunden spaeter taucht genau dieselbe Plesk-Zeitkennung
+        // ohne Zwischensnapshots wieder auf. Alte Basislinie ist
+        // abgelaufen und darf keinen kuenstlichen Delta-Alarm geben.
+        var returnAfterGap = Compare(baseline.Checkpoint, 73 * 60,
+            Account("one@example.test", 150, Hour("2026-11-20 08", 10, 900)));
+
+        Assert(returnAfterGap.Status == MailSecuritySnapshotChangeStatus.NoCountGrowth,
+            "Nach langer Datenluecke ist eine neue Basislinie erforderlich.");
+        Assert(returnAfterGap.Changes.Count == 0,
+            "Abgelaufene Watermark darf keinen scheinbaren Delta-Wert erzeugen.");
+        Assert(returnAfterGap.Checkpoint.Watermarks.Count == 1
+               && returnAfterGap.Checkpoint.Watermarks[0].Rejected == 900,
+            "Neuer Hoechststand muss ohne historische Zuwachsmeldung gespeichert werden.");
+        return Task.CompletedTask;
+    }
+
     public static Task CaseInsensitiveAccountAndLimitZeroAsync()
     {
         var baseline = Compare(null, 0,

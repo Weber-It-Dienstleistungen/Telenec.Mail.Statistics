@@ -10,7 +10,7 @@
 		<StartupObject>Telenec.Mail.Statistics.Admin.Program</StartupObject>
 		<ApplicationIcon>Assets\TelenecMailAdmin.ico</ApplicationIcon>
 
-		<Version>0.1.1</Version>
+		<Version>0.1.2</Version>
 	</PropertyGroup>
 
 	<ItemGroup>

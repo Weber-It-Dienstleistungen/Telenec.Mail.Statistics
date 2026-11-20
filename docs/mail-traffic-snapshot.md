@@ -6,11 +6,20 @@ Der dritte Reiter **Mail-Statistik** zeigt Mailverkehr der letzten 24 Stunden:
 24 stündliche Werte für eingehende und ausgehende Nachrichten sowie die
 drei meistgenutzten Sender- und Empfänger-Accounts.
 
-**Stand Sprint 36.2:** GUI und geschützte Lese-API sind implementiert.
-Der Postfix/Plesk-Collector liegt unter `tools/telenec-mail-traffic-collector.py`.
-Er läuft standardmäßig **nur diagnostisch** und schreibt ohne `--write` keine Datei.
-Ein periodischer Collector und eine produktive Datenquelle sind noch nicht aktiviert.
-Die Oberfläche zeigt deshalb weiterhin „Datenquelle nicht eingerichtet“.
+**Stand Sprint 41 (20.11.2026):** GUI, geschützte API und produktiver
+Postfix/Plesk-Collector sind eingerichtet. Der systemd-Timer
+`telenec-mail-traffic-snapshot.timer` aktualisiert den Snapshot
+alle fuenf Minuten. Die stündlichen Versand-/Empfangsbalken werden
+im Admin-Client 0.1.1 bereits produktiv angezeigt.
+
+Die Top 3 werden im Collector berechnet, aber im produktiven
+Standardbetrieb bewusst durch `--omit-account-rankings` aus
+dem gespeicherten Snapshot entfernt. Nach entsprechender
+Datenschutzfreigabe koennen sie ab Sprint 41 gezielt durch
+`tools/Configure-MailTrafficRankings.sh --enable` zugeschaltet
+und mit `--disable` wieder ausgeschaltet werden.
+Der Rollout fuer Client 0.1.2 steht in
+`docs/release-0.1.2-data-sources.md`.
 
 ## Lese-Schnittstelle
 
@@ -91,13 +100,12 @@ Die Milter-Diagnose beschreibt die im gewählten Zeitfenster auffindbaren
 Logereignisse. Die bisherige über mehrere Logtage aggregierte AWK-Auswertung
 ist **nicht** gleichzusetzen mit einer 24-Stunden-Statistik.
 
-## Anforderungen an die spätere Datenquelle
+## Erfuellte Zaehlregeln und bestehende Betriebsgrenzen
 
-**Die eigentliche Arbeit steht noch aus.** Erst das reale MTA-Setup prüfen:
-Postfix/Qmail, Logspeicherort, Logrotation, Zeitzone, mehrere Mailserver,
-Zustelltransport und Berechtigung des technischen Collector-Prozesses.
-
-Für belastbare Kennzahlen gelten folgende fachliche Regeln:
+Der Collector wurde fuer das aktuelle Postfix/Plesk-Setup
+eingerichtet. Vor einem spaeteren Umzug oder Serverwechsel
+Logrotation, Zeitzone, Transportwege und Berechtigungen
+erneut pruefen. Es gelten weiterhin folgende fachliche Regeln:
 
 1. **Ausgehend:** Erfolgreich angenommene, authentifizierte SMTP-Submissions
    von lokalen Accounts anhand der Authentifizierungsidentität
@@ -115,6 +123,8 @@ Für belastbare Kennzahlen gelten folgende fachliche Regeln:
    produktiven Anbinden abstimmen. Nicht dieselbe Einwilligungslogik
    der Client-Nutzungsstatistik stillschweigend übernehmen.
 
-Der künftige Collector kann auf dem Mailserver aus Logs aggregieren und
-nur den kompakten Snapshot atomar ersetzen. Bis zur ausdrücklichen
-Produktivfreigabe gibt es **keine automatische Protokollauswertung**.
+Der aktuelle Collector aggregiert die Protokolldaten
+ausschliesslich auf dem Mailserver zu einem atomar ersetzten
+Snapshot. Die serverseitige Erfassung laeuft bereits; die
+personenbeziehbaren Top-3-Listen bleiben standardmaessig deaktiviert
+und werden erst nach gesonderter Abstimmung freigeschaltet.

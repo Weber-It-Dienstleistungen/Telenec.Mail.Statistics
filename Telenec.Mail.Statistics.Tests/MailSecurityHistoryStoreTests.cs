@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Telenec.Mail.Statistics.Server.Data;
 using Telenec.Mail.Statistics.Server.MailSecurity;
+using Telenec.Mail.Statistics.Server.Models;
 
 namespace Telenec.Mail.Statistics.Tests;
 
@@ -29,6 +30,37 @@ internal static class MailSecurityHistoryStoreTests
             "Keine historischen Vorfaelle erfinden.");
         Assert(await db.MailSecurityCheckpointStates.CountAsync() == 0,
             "Vor dem ersten Poll existiert noch kein Checkpoint.");
+    }
+
+    public static async Task ExistingInstallationsSurviveUpgradeAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync(migrate: false);
+        await using var db = fixture.Context();
+
+        // Simuliert den produktiven Datenbankstand von 0.1.3,
+        // bevor Sprint-43.4b-Tabellen existieren.
+        await db.Database.MigrateAsync("20260930113558_InitialCreate");
+        db.Installations.Add(new Installation
+        {
+            InstallationKey = "synthetic-key-not-real",
+            FirstSeenUtc = T0.AddDays(-10).UtcDateTime,
+            LastSeenUtc = T0.UtcDateTime,
+            CurrentVersion = "0.1.2",
+            ConsentVersion = 1
+        });
+        await db.SaveChangesAsync();
+
+        await db.Database.MigrateAsync();
+
+        var persisted = await db.Installations
+            .AsNoTracking().SingleAsync();
+        Assert(persisted.InstallationKey == "synthetic-key-not-real"
+               && persisted.CurrentVersion == "0.1.2"
+               && persisted.LastSeenUtc == T0.UtcDateTime,
+            "Bestehende Installationsdaten muessen die Migration ueberleben.");
+        Assert(await db.MailSecurityCheckpointStates.CountAsync() == 0
+               && await db.MailSecurityIncidents.CountAsync() == 0,
+            "Neue Tabellen muessen anfangs leer bleiben.");
     }
 
     public static async Task FirstSnapshotIsBaselineOnlyAsync()
@@ -350,14 +382,18 @@ internal static class MailSecurityHistoryStoreTests
                 .UseSqlite(connection).Options;
         }
 
-        public static async Task<Fixture> CreateAsync()
+        public static async Task<Fixture> CreateAsync(bool migrate = true)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
             var fixture = new Fixture(connection);
 
-            await using var db = fixture.Context();
-            await db.Database.MigrateAsync();
+            if (migrate)
+            {
+                await using var db = fixture.Context();
+                await db.Database.MigrateAsync();
+            }
+
             return fixture;
         }
 

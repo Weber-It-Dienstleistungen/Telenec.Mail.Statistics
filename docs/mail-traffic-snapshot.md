@@ -100,6 +100,68 @@ Die Milter-Diagnose beschreibt die im gewählten Zeitfenster auffindbaren
 Logereignisse. Die bisherige über mehrere Logtage aggregierte AWK-Auswertung
 ist **nicht** gleichzusetzen mit einer 24-Stunden-Statistik.
 
+## Bugfix-Kandidat 23.11.2026 – Issue #2 (noch nicht produktiv)
+
+Seit 21.11.2026 wurde der produktive
+`mail-traffic-preview.json` wegen der mehr als 20 Prozent
+**ungeklaerten** SASL-Queue-Einlieferungen nicht mehr aktualisiert.
+Die Plesk-Sicherheitsstatistik blieb eigenstaendig aktuell.
+
+Reine Diagnose am 23.11.2026:
+204 via `qmgr` bestaetigte Mailannahmen, 7.425
+Milter-Ablehnungen und 57 offene Faelle; davon konnten
+**28** bei konservativer Session-Zuordnung als
+`smtpd disconnect data=0/N` eingegrenzt werden.
+19 hatten keine belegte DATA-Abbruchmeldung, 10 waren
+nicht eindeutig zuzuordnen. Der Anteil ungeloester
+Faelle liegt vor Korrektur ueber der 20-Prozent-Schwelle.
+
+Der neue **noch nicht produktiv aktivierte** Collector auf
+`main` klassifiziert deshalb ausschliesslich Sitzungen als
+`strict_data_aborted_auth`, wenn:
+
+- genau eine `smtpd`-Prozess-ID zur authentifizierten
+  Queue-ID gehoert;
+- ein ausdruecklicher `connect` vor und ein `disconnect`
+  nach dem Queue-Event innerhalb von 15 Minuten vorliegt;
+- der Verbindungsabschluss `data=0/N` mit `N > 0` enthaelt;
+- keine andere Queue-ID innerhalb dieser klar abgegrenzten
+  SMTPD-Verbindung nachweisbar ist;
+- keine mehrdeutigen Verbindungsgraenzen oder dazwischenliegenden
+  Verbindungsabschluesse auftreten;
+- fuer den betreffenden Versandversuch **weder** eine
+  `qmgr`-Bestaetigung **noch** eine erkannte Milter-Ablehnung
+  vorliegt.
+
+Solche Sitzungen werden **nicht als versendete Nachrichten
+gezaehlt**, aber auch nicht mehr als unerklaerte
+Einlieferungen fuer die 20%-Plausibilitaetspruefung
+angesehen. Alle anderen ungeklaerten Ereignisse
+bleiben ungeklaert; die Schwelle bleibt **unveraendert 20 %**.
+
+Es gibt einen separaten Zaehler fuer die strikt erkannten
+Abbrueche. Die bestehenden Versand- und Empfangsdefinitionen,
+Top-3-Zaehlweise, Snapshot-Struktur und API bleiben unveraendert.
+
+**Regressionsabnahme vor Serveraenderung:**
+
+```bash
+python3 -m unittest discover -s tools/tests -p 'test_mail_traffic_collector.py' -v
+python3 -m py_compile tools/telenec-mail-traffic-collector.py
+python3 tools/telenec-mail-traffic-collector.py
+```
+
+Der letzte Befehl ist **nur Diagnose**, also kein `--write`.
+Erst nach erfolgreichen Kunstlog-Tests UND fachlich plausibler
+Diagnose auf echten Logs wird die installierte Datei durch
+einen getrennt freigegebenen Deploy-Schritt ersetzt.
+Die aktuellen Snapshots und Timer werden durch diese
+GitHub-Aenderung nicht veraendert.
+
+Bei Ablehnung nach der Diagnose bleibt der Status offen:
+keine automatische Grenzwertlockerung oder erzwungene
+Snapshot-Aktualisierung.
+
 ## Erfuellte Zaehlregeln und bestehende Betriebsgrenzen
 
 Der Collector wurde fuer das aktuelle Postfix/Plesk-Setup

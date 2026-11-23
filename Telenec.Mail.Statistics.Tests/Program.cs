@@ -902,6 +902,14 @@ internal static class Program
             MailSecurityHistoryStoreTests.StorageErrorRollsBackEntireCheckpointAsync);
         await Test("Risiko und Versandlimit nur als Metadaten",
             MailSecurityHistoryStoreTests.RiskLevelAndLimitAreOnlyMetadataAsync);
+        await Test("Historisches Risiko eskaliert kleine neue Delta nicht",
+            MailSecurityHistoryStoreTests.HistoricalRiskDoesNotEscalateTinyDeltaAsync);
+        await Test("25/100/500 neue Ablehnungen: abgestufte Prioritaet",
+            MailSecurityHistoryStoreTests.NewRejectionThresholdsAreProgressiveAsync);
+        await Test("Reine Passed-Aenderungen bleiben ohne Vorfall",
+            MailSecurityHistoryStoreTests.PassedOnlyTrafficDoesNotCreateIncidentAsync);
+        await Test("Historie lesen ohne Schreibeffekt",
+            MailSecurityHistoryStoreTests.HistoryCanBeReadWithoutMutatingItAsync);
 
         Console.WriteLine();
         Console.WriteLine(

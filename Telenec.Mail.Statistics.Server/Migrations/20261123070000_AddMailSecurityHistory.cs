@@ -1,7 +1,5 @@
 using System;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Telenec.Mail.Statistics.Server.Data;
 
 #nullable disable
 
@@ -12,8 +10,6 @@ namespace Telenec.Mail.Statistics.Server.Migrations;
 /// Installationsstatistik wird weder geaendert noch geloescht.
 /// Nicht automatisch produktiv ausrollen, bevor die Tests gruen sind.
 /// </summary>
-[DbContext(typeof(StatisticsDbContext))]
-[Migration("20261123070000_AddMailSecurityHistory")]
 public partial class AddMailSecurityHistory : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

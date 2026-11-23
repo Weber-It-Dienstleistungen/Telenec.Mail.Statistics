@@ -47,6 +47,67 @@ namespace Telenec.Mail.Statistics.Server.Migrations
 
                     b.ToTable("Installations", (string)null);
                 });
+            modelBuilder.Entity("Telenec.Mail.Statistics.Server.MailSecurity.MailSecurityCheckpointState", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedNever()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CheckpointJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MailSecurityCheckpointStates", (string)null);
+                });
+
+            modelBuilder.Entity("Telenec.Mail.Statistics.Server.MailSecurity.MailSecurityIncident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedNever()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FirstObservedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastObservedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxRiskLevel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("NewPassed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("NewRejected")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SendingLimitZero")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Account")
+                        .IsUnique()
+                        .HasFilter("\"ClosedAtUtc\" IS NULL")
+                        .HasDatabaseName("IX_MailSecurityIncidents_OpenAccount");
+
+                    b.HasIndex("ClosedAtUtc");
+
+                    b.ToTable("MailSecurityIncidents", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

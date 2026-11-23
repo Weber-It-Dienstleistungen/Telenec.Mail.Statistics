@@ -183,7 +183,10 @@ def is_strict_data_abort(
     ):
         return False
 
-    future_connects = {t for t, kind in events if t > accepted_at}
+    future_connects = {
+        t for t, kind in events
+        if t > accepted_at and kind == "connect"
+    }
     next_connect = min(future_connects) if future_connects else None
 
     endings = {

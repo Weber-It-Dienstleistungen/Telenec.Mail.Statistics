@@ -342,6 +342,129 @@ internal static class MailSecurityHistoryStoreTests
             "Reiner Lesezugriff darf keine Daten veraendern.");
     }
 
+    public static async Task IndependentSqliteConnectionsSerializeSnapshotsAsync()
+    {
+        // Anders als die uebrigen In-Memory-Tests: echte SQLite-Datei,
+        // eigene Verbindungen/DbContexts fuer jeden konkurrierenden Aufruf.
+        // Kein Zugriff auf Kundendaten oder den produktiven Server.
+        var path = Path.Combine(Path.GetTempPath(),
+            "telenec-security-concurrent-" + Guid.NewGuid().ToString("N")
+            + ".db");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            DefaultTimeout = 30,
+            Pooling = false
+        }.ToString();
+
+        var options = new DbContextOptionsBuilder<StatisticsDbContext>()
+            .UseSqlite(connectionString).Options;
+
+        async Task<MailSecurityHistoryWriteResult> ProcessOnNewConnection(
+            MailSecurityOverview snapshot)
+        {
+            await using var db = new StatisticsDbContext(options);
+            return await new MailSecurityHistoryStore(db)
+                .ProcessAsync(snapshot);
+        }
+
+        async Task<MailSecurityHistoryWriteResult[]> Concurrent(
+            MailSecurityOverview first, MailSecurityOverview second)
+        {
+            var gate = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task<MailSecurityHistoryWriteResult> Schedule(
+                MailSecurityOverview snapshot) => Task.Run(async () =>
+            {
+                await gate.Task;
+                return await ProcessOnNewConnection(snapshot);
+            });
+
+            var left = Schedule(first);
+            var right = Schedule(second);
+            gate.SetResult(true);
+            return await Task.WhenAll(left, right);
+        }
+
+        try
+        {
+            await using (var db = new StatisticsDbContext(options))
+            {
+                await db.Database.MigrateAsync();
+            }
+
+            // Zwei unabhaengige Worker treffen auf eine LEERE Historie.
+            // Genau einer darf die erste Baseline anlegen.
+            var initial = Snapshot(T0, passed: 10, rejected: 30);
+            var firstResults = await Concurrent(initial, initial);
+            Assert(firstResults.Count(result =>
+                       result.Status ==
+                           MailSecuritySnapshotChangeStatus.InitialBaseline) == 1,
+                "Nur eine Verbindung darf den initialen Checkpoint erstellen.");
+
+            await using (var check = new StatisticsDbContext(options))
+            {
+                Assert(await check.MailSecurityCheckpointStates.CountAsync() == 1
+                       && await check.MailSecurityIncidents.CountAsync() == 0,
+                    "Gleichzeitige Basislinien duerfen keine Duplikate erzeugen.");
+            }
+
+            // Gleicher neuer Snapshot bei zwei Verbindungen: keine
+            // doppelte Buchung von 40 Ablehnungen.
+            var growth = Snapshot(
+                T0.AddMinutes(5), passed: 12, rejected: 70);
+            var equalResults = await Concurrent(growth, growth);
+            Assert(equalResults.Count(result =>
+                       result.CreatedIncidents == 1) == 1,
+                "Nur eine Verbindung darf den neuen Vorfall anlegen.");
+
+            await using (var check = new StatisticsDbContext(options))
+            {
+                var incident = await check.MailSecurityIncidents.SingleAsync();
+                Assert(incident.NewRejected == 40
+                       && incident.NewPassed == 2,
+                    "Gleichzeitige Worker duerfen keine Ablehnungen verdoppeln.");
+            }
+
+            // Zwei verschiedene Snapshots kommen konkurrierend an.
+            // Unabhaengig von der Reihenfolge muss der hoehere
+            // Wasserstand gewinnen, ohne doppelte Deltas.
+            var older = Snapshot(
+                T0.AddMinutes(10), passed: 13, rejected: 85);
+            var newer = Snapshot(
+                T0.AddMinutes(15), passed: 20, rejected: 100);
+            await Concurrent(older, newer);
+
+            await using var final = new StatisticsDbContext(options);
+            var checkpoint =
+                await final.MailSecurityCheckpointStates.SingleAsync();
+            var incidents = await final.MailSecurityIncidents.ToListAsync();
+
+            Assert(checkpoint.UpdatedAtUtc ==
+                       T0.AddMinutes(15).UtcDateTime,
+                "Ein aelterer Snapshot darf neueren Fortschritt nicht ersetzen.");
+            Assert(incidents.Count == 1
+                   && incidents[0].NewRejected == 70
+                   && incidents[0].NewPassed == 10,
+                "Konkurrierende Schreibtransaktionen muessen die Deltas "
+                + "ohne Verlust oder Doppelbuchung erhalten.");
+        }
+        finally
+        {
+            // Eigene temporaere Testdatenbank stets entfernen.
+            SqliteConnection.ClearAllPools();
+            foreach (var suffix in new[] { "", "-wal", "-shm" })
+            {
+                var file = path + suffix;
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+    }
+
     private static async Task<MailSecurityHistoryWriteResult> Process(
         Fixture fixture, MailSecurityOverview snapshot)
     {

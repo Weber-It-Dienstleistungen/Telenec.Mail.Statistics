@@ -912,6 +912,8 @@ internal static class Program
             MailSecurityHistoryStoreTests.PassedOnlyTrafficDoesNotCreateIncidentAsync);
         await Test("Historie lesen ohne Schreibeffekt",
             MailSecurityHistoryStoreTests.HistoryCanBeReadWithoutMutatingItAsync);
+        await Test("SQLite-Dateisperre: mehrere Instanzen ohne Doppelbuchung",
+            MailSecurityHistoryStoreTests.IndependentSqliteConnectionsSerializeSnapshotsAsync);
 
         // ================================================
         // Sprint 43.4c - Inaktiver Worker, deterministische Einzellaeufe

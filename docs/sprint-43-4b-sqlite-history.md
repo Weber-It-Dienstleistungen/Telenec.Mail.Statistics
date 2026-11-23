@@ -99,10 +99,11 @@ bei `Critical`.
 ## Regressionstests
 
 `Telenec.Mail.Statistics.Tests/MailSecurityHistoryStoreTests.cs`
-enthaelt **14 echte SQLite-In-Memory-Integrationstests** mit
+enthaelt **15 echte SQLite-In-Memory-Integrationstests** mit
 synthetischen Accountdaten. Sie pruefen u. a.:
 
-- additive Migration mit bestehenden Tabellen,
+- additive Migration mit bestehenden Tabellen sowie
+  Upgrade eines bestueckten `Installations`-Bestands,
 - historische Basislinie ohne falschen Vorfall,
 - erste Zunahme und weitere Aktualisierung,
 - wiederholte/alte Snapshots und neue DbContext-Instanz,
@@ -120,7 +121,7 @@ dotnet build .\Telenec.Mail.Statistics.slnx -c Release
 dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release
 ```
 
-**Erwartung:** 135 Tests erfolgreich (121 bisherige + 14 neue),
+**Erwartung:** 136 Tests erfolgreich (121 bisherige + 15 neue),
 null fehlgeschlagen. Ein gruener Build wurde fuer diesen
 neuen Code noch nicht bestaetigt.
 

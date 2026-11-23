@@ -73,26 +73,25 @@ public sealed class MailSecurityHistoryStore
         var observedAtUtc =
             comparison.Checkpoint.LastSnapshotAtUtc!.Value.UtcDateTime;
 
-        // Alle aktiven Beobachtungen holen wir vor der Aenderung.
-        // Es ist maximal ein offener Datensatz je Account erlaubt.
+        // Erst die inaktiven Faelle IN DERSELBEN SQL-Transaktion
+        // schliessen. So ist die UNIQUE-Bedingung fuer einen neuen
+        // Vorfall desselben Accounts bereits beim INSERT frei.
+        // Ein eventueller Fehler rollt auch diesen Abschluss zurueck.
+        var idleCutoffUtc = observedAtUtc.AddHours(-IdleClosureHours);
+        var closedCount = await _database.MailSecurityIncidents
+            .Where(incident => incident.ClosedAtUtc == null
+                && incident.LastObservedUtc < idleCutoffUtc)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    incident => incident.ClosedAtUtc,
+                    (DateTime?)observedAtUtc),
+                cancellationToken);
+
         var openIncidents = await _database.MailSecurityIncidents
             .Where(incident => incident.ClosedAtUtc == null)
             .ToListAsync(cancellationToken);
 
-        var closedCount = 0;
-        var idleCutoffUtc = observedAtUtc.AddHours(-IdleClosureHours);
-
-        foreach (var incident in openIncidents)
-        {
-            if (incident.LastObservedUtc < idleCutoffUtc)
-            {
-                incident.ClosedAtUtc = observedAtUtc;
-                closedCount++;
-            }
-        }
-
         var activeByAccount = openIncidents
-            .Where(incident => incident.ClosedAtUtc is null)
             .ToDictionary(
                 incident => incident.Account,
                 StringComparer.OrdinalIgnoreCase);

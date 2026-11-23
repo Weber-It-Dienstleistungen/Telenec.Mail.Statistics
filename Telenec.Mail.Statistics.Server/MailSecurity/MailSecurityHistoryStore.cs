@@ -96,16 +96,6 @@ public sealed class MailSecurityHistoryStore
                 incident => incident.Account,
                 StringComparer.OrdinalIgnoreCase);
 
-        // Die aktuelle Risikoauswertung liefert nur Kontext / eine
-        // maximale Beobachtungsprioritaet, kein Spam-Urteil.
-        // Ein nicht klassifizierter Zuwachs bleibt intern auf "None".
-        var riskByAccount = MailSecurityRiskEvaluator
-            .Evaluate(snapshot)
-            .Findings
-            .ToDictionary(finding => finding.Account,
-                finding => finding.Level,
-                StringComparer.OrdinalIgnoreCase);
-
         var createdCount = 0;
         var updatedCount = 0;
         var newRejected = 0L;
@@ -122,9 +112,6 @@ public sealed class MailSecurityHistoryStore
             }
 
             var account = delta.Account.ToLowerInvariant();
-            var level = riskByAccount.TryGetValue(account, out var risk)
-                ? risk
-                : MailSecurityRiskLevel.None;
 
             newRejected = checked(newRejected + delta.NewRejected);
             newPassed = checked(newPassed + delta.NewPassed);
@@ -136,8 +123,8 @@ public sealed class MailSecurityHistoryStore
                     incident.NewRejected + delta.NewRejected);
                 incident.NewPassed = checked(
                     incident.NewPassed + delta.NewPassed);
-                incident.MaxRiskLevel = (MailSecurityRiskLevel)Math.Max(
-                    (int)incident.MaxRiskLevel, (int)level);
+                incident.MaxRiskLevel = RiskFromNewRejections(
+                    incident.NewRejected);
                 incident.SendingLimitZero = delta.SendingLimitZero;
                 updatedCount++;
             }
@@ -151,7 +138,7 @@ public sealed class MailSecurityHistoryStore
                     LastObservedUtc = observedAtUtc,
                     NewRejected = delta.NewRejected,
                     NewPassed = delta.NewPassed,
-                    MaxRiskLevel = level,
+                    MaxRiskLevel = RiskFromNewRejections(delta.NewRejected),
                     SendingLimitZero = delta.SendingLimitZero
                 };
                 _database.MailSecurityIncidents.Add(incident);
@@ -197,6 +184,21 @@ public sealed class MailSecurityHistoryStore
         return new(comparison.Status, createdCount, updatedCount,
             closedCount, newRejected);
     }
+
+    // Vorlaeufige, rein mengenbezogene PRIORITAET aus tatsaechlich
+    // neu beobachteten Ablehnungen. Keine Aussage ueber Spam,
+    // Quote oder tatsaechliche Kompromittierung.
+    // Absichtlich getrennt von MailSecurityRiskEvaluator, der
+    // historische Bestandswerte eines Snapshots bewertet.
+    private static MailSecurityRiskLevel RiskFromNewRejections(
+        long newRejected) =>
+        newRejected switch
+        {
+            >= 500 => MailSecurityRiskLevel.Critical,
+            >= 100 => MailSecurityRiskLevel.Warning,
+            >= 25 => MailSecurityRiskLevel.Observe,
+            _ => MailSecurityRiskLevel.None
+        };
 
     public async Task<MailSecurityHistorySnapshot> ReadAsync(
         CancellationToken cancellationToken = default)

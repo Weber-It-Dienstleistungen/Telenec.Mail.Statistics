@@ -84,6 +84,7 @@ def main():
     # unkeyed connection events from the same process, within
     # the short observation window.
     accepted_processes = collections.defaultdict(set)
+    accepted_by_pid = collections.defaultdict(set)
     connection_events = collections.defaultdict(list)
     smtpd_pattern = re.compile(
         r"postfix/smtpd\[(?P<pid>\d+)\]:\s+(?P<details>.*)"
@@ -155,9 +156,9 @@ def main():
                 if sasl and api["normalize_account"](sasl.group("account")):
                     accepted[qid].add(at)
                     if smtpd_match:
-                        accepted_processes[(qid, at)].add(
-                            smtpd_match.group("pid")
-                        )
+                        process_id = smtpd_match.group("pid")
+                        accepted_processes[(qid, at)].add(process_id)
+                        accepted_by_pid[process_id].add((qid, at))
 
             if process == "qmgr":
                 is_confirmed = bool(qmanager_pattern.search(details))
@@ -176,6 +177,7 @@ def main():
     other_processes = collections.Counter()
     orphan_lifecycle = collections.Counter()
     smtpd_endings = collections.Counter()
+    confirmed_session_aborts = collections.Counter()
     confirmed_count = rejected_count = unresolved_count = 0
     recent_unresolved = 0
 
@@ -249,6 +251,70 @@ def main():
                 for kind in hints:
                     smtpd_endings[kind] += 1
 
+                # Stronger evidence than loose PID/time hints:
+                # require an explicit connect event, no intervening
+                # disconnect or new connect, one queued smtpd
+                # candidate in the entire connection, and the
+                # connection's own disconnect with data=0/N (N>0).
+                # A reused PID alone NEVER proves an abort.
+                candidate_pids = accepted_processes.get((qid, at), ())
+                if len(candidate_pids) != 1:
+                    confirmed_session_aborts["pid_unbekannt_oder_mehrdeutig"] += 1
+                else:
+                    pid = next(iter(candidate_pids))
+                    session_events = sorted(
+                        connection_events.get(pid, ()),
+                        key=lambda event: event[0]
+                    )
+                    opens = [
+                        stamp for stamp, kind in session_events
+                        if kind == "connect" and stamp < at
+                    ]
+                    if not opens:
+                        confirmed_session_aborts["kein_eindeutiger_connect_start"] += 1
+                    else:
+                        opened = max(opens)
+                        earlier_ends = [
+                            stamp for stamp, kind in session_events
+                            if kind.startswith("disconnect")
+                            and opened <= stamp <= at
+                        ]
+                        later_opens = [
+                            stamp for stamp, kind in session_events
+                            if kind == "connect" and stamp > at
+                        ]
+                        next_open = min(later_opens) if later_opens else None
+                        ends = [
+                            (stamp, kind)
+                            for stamp, kind in session_events
+                            if kind.startswith("disconnect")
+                            and stamp > at
+                            and (next_open is None or stamp < next_open)
+                        ]
+                        if earlier_ends or not ends:
+                            confirmed_session_aborts["verbindung_nicht_belegt"] += 1
+                        else:
+                            ended, end_kind = min(ends)
+                            candidates = [
+                                (other_qid, stamp)
+                                for other_qid, stamp in accepted_by_pid[pid]
+                                if opened < stamp < ended
+                            ]
+                            # In unusual same-second events, the
+                            # order is unverifiable: do not classify.
+                            boundaries_ambiguous = any(
+                                stamp == opened or stamp == ended
+                                for _other_qid, stamp in accepted_by_pid[pid]
+                            )
+                            if (len(candidates) != 1
+                                    or candidates[0] != (qid, at)
+                                    or boundaries_ambiguous):
+                                confirmed_session_aborts["mehrere_oder_unklare_queue_ids"] += 1
+                            elif end_kind == "disconnect_data_failed":
+                                confirmed_session_aborts["eindeutige_sitzung_data_0_von_n"] += 1
+                            else:
+                                confirmed_session_aborts["sitzung_ohne_belegten_data_abbruch"] += 1
+
                 for process in {
                     proc for t, proc in processes.get(qid, ())
                     if at <= t < limit
@@ -282,6 +348,10 @@ def main():
     for kind in sorted(smtpd_endings):
         print("Ungeklaerte Vorgaenge mit SMTPD-Hinweis:", kind,
               smtpd_endings[kind])
+    print("=== Strikte Verbindungszuordnung (kein produktives Urteil) ===")
+    for kind in sorted(confirmed_session_aborts):
+        print("Sitzungsevidenz:", kind, confirmed_session_aborts[kind])
+    print("Eine DATA=0/N-Sitzung beweist keine erfolgreiche Einlieferung.")
     print("Es wurden keine Snapshot-Dateien geschrieben.")
     return 0
 

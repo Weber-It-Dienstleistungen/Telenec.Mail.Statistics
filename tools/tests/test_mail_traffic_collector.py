@@ -161,6 +161,16 @@ class MailTrafficSessionTests(unittest.TestCase):
         self.assertEqual(stats["unconfirmed_auth"], 1)
         self.assertEqual(stats["strict_data_aborted_auth"], 0)
 
+    def test_conflicting_same_second_sasl_identities_stay_unresolved(self):
+        stats = analyze(
+            connect(second=0),
+            accepted(qid="A00001", second=2, account="first@example.test"),
+            accepted(qid="A00001", second=2, account="second@example.test"),
+            disconnect(second=5),
+        )
+        self.assertEqual(stats["unconfirmed_auth"], 2)
+        self.assertEqual(stats["strict_data_aborted_auth"], 0)
+
     def test_incoming_mail_processing_is_not_changed(self):
         stats = analyze(
             row(

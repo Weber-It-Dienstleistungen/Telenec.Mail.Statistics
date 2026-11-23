@@ -874,6 +874,35 @@ internal static class Program
         await Test("Account-Schreibweise und Limit 0 beruecksichtigt",
             MailSecuritySnapshotChangeTests.CaseInsensitiveAccountAndLimitZeroAsync);
 
+        // ================================================
+        // Sprint 43.4b - Transaktionale SQLite-Vorfallhistorie
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4b (SQLite-Historie)");
+        Console.WriteLine();
+
+        await Test("Migration: bestehende und neue Tabellen",
+            MailSecurityHistoryStoreTests.MigrationCreatesIsolatedTablesAsync);
+        await Test("Historischer Erstscan bleibt Basislinie",
+            MailSecurityHistoryStoreTests.FirstSnapshotIsBaselineOnlyAsync);
+        await Test("Neue Ablehnungen erzeugen einen Vorfall",
+            MailSecurityHistoryStoreTests.IncreasingCountersCreateOneIncidentAsync);
+        await Test("Wiederholte und alte Polls bleiben idempotent",
+            MailSecurityHistoryStoreTests.DuplicateAndOlderPollAreIdempotentAsync);
+        await Test("Neuer DB-Context behaelt Checkpoint und Zaehler",
+            MailSecurityHistoryStoreTests.NewDbContextKeepsCheckpointAsync);
+        await Test("Fehlende Daten loeschen keine Historie",
+            MailSecurityHistoryStoreTests.UnavailableSnapshotChangesNothingAsync);
+        await Test("Inaktive Vorfaelle abschliessen und neu oeffnen",
+            MailSecurityHistoryStoreTests.IdleIncidentClosesAndLaterReopensAsync);
+        await Test("30-Tage-Aufbewahrung fuer geschlossene Vorfaelle",
+            MailSecurityHistoryStoreTests.ClosedIncidentsArePrunedAfterThirtyDaysAsync);
+        await Test("SQLite-Fehler rollt Checkpoint und Vorfall zurueck",
+            MailSecurityHistoryStoreTests.StorageErrorRollsBackEntireCheckpointAsync);
+        await Test("Risiko und Versandlimit nur als Metadaten",
+            MailSecurityHistoryStoreTests.RiskLevelAndLimitAreOnlyMetadataAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

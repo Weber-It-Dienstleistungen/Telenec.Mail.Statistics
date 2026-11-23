@@ -884,6 +884,8 @@ internal static class Program
 
         await Test("Migration: bestehende und neue Tabellen",
             MailSecurityHistoryStoreTests.MigrationCreatesIsolatedTablesAsync);
+        await Test("Migration: vorhandene Installationsdaten bleiben erhalten",
+            MailSecurityHistoryStoreTests.ExistingInstallationsSurviveUpgradeAsync);
         await Test("Historischer Erstscan bleibt Basislinie",
             MailSecurityHistoryStoreTests.FirstSnapshotIsBaselineOnlyAsync);
         await Test("Neue Ablehnungen erzeugen einen Vorfall",

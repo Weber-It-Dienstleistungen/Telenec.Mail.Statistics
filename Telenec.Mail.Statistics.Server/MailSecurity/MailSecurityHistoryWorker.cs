@@ -55,7 +55,8 @@ public sealed class MailSecurityHistoryWorker : BackgroundService
         }
     }
 
-    private async Task ProcessSnapshotOnceAsync(
+    // Internal test hook: runs exactly one cycle without starting the timer.
+    internal async Task ProcessSnapshotOnceAsync(
         CancellationToken cancellationToken)
     {
         try

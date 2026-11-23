@@ -913,6 +913,23 @@ internal static class Program
         await Test("Historie lesen ohne Schreibeffekt",
             MailSecurityHistoryStoreTests.HistoryCanBeReadWithoutMutatingItAsync);
 
+        // ================================================
+        // Sprint 43.4c - Inaktiver Worker, deterministische Einzellaeufe
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4c (Worker)");
+        Console.WriteLine();
+
+        await Test("Worker verarbeitet ersten Snapshot nur als Basislinie",
+            MailSecurityHistoryWorkerTests.FirstCycleCreatesOnlyBaselineAsync);
+        await Test("Worker verbucht neue Ablehnungen nur einmal",
+            MailSecurityHistoryWorkerTests.RepeatedCycleIsIdempotentAsync);
+        await Test("Worker ignoriert fehlende, defekte und alte Snapshots",
+            MailSecurityHistoryWorkerTests.UnavailableSourcesPreserveCheckpointAsync);
+        await Test("Worker erholt sich nach SQLite-Schreibfehler",
+            MailSecurityHistoryWorkerTests.SqliteFailureRollsBackAndCanRetryAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

@@ -426,10 +426,19 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                 continue
 
             if not queued_for_acceptance:
+                # Two different SASL account identities for the same
+                # queue ID and second cannot be disambiguated from
+                # RFC3164 timestamps; keep both unresolved.
+                same_second_accounts = {
+                    candidate_account
+                    for candidate_at, candidate_account in events
+                    if candidate_at == at
+                }
+
                 # An unequivocal SMTPD DATA=0/N disconnect on
                 # the SAME exclusive session is *not* a queued
                 # message. Non-provable cases remain unresolved.
-                if is_strict_data_abort(
+                if len(same_second_accounts) == 1 and is_strict_data_abort(
                     qid,
                     at,
                     submission_processes.get((qid, at, account), set()),

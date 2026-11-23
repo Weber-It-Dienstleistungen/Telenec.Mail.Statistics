@@ -229,6 +229,87 @@ internal static class MailSecurityHistoryStoreTests
             "Historische 300 Ablehnungen werden nicht doppelt gezaehlt.");
     }
 
+    public static async Task HistoricalRiskDoesNotEscalateTinyDeltaAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        // 810 alte Ablehnungen koennen in der Bestands-Risk-Engine
+        // Warnungen ausloesen, sind aber kein neuer Vorfall.
+        await Process(fixture, Snapshot(T0, 1, 810));
+        await Process(fixture, Snapshot(T0.AddMinutes(5), 1, 811));
+
+        await using var db = fixture.Context();
+        var incident = await db.MailSecurityIncidents.SingleAsync();
+        Assert(incident.NewRejected == 1
+               && incident.MaxRiskLevel == MailSecurityRiskLevel.None,
+            "Eine einzige neue Ablehnung darf historische 810 nicht uebernehmen.");
+    }
+
+    public static async Task NewRejectionThresholdsAreProgressiveAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await Process(fixture, Snapshot(T0, 0, 0));
+        await Process(fixture, Snapshot(T0.AddMinutes(5), 0, 25));
+
+        await using (var db = fixture.Context())
+        {
+            Assert((await db.MailSecurityIncidents.SingleAsync()).MaxRiskLevel
+                   == MailSecurityRiskLevel.Observe,
+                "25 neue Ablehnungen sind vorerst Beobachtung.");
+        }
+
+        await Process(fixture, Snapshot(T0.AddMinutes(10), 0, 100));
+        await using (var db = fixture.Context())
+        {
+            Assert((await db.MailSecurityIncidents.SingleAsync()).MaxRiskLevel
+                   == MailSecurityRiskLevel.Warning,
+                "100 neue Ablehnungen erhoehen den Pruefbedarf.");
+        }
+
+        await Process(fixture, Snapshot(T0.AddMinutes(15), 0, 500));
+        await using var check = fixture.Context();
+        var incident = await check.MailSecurityIncidents.SingleAsync();
+        Assert(incident.NewRejected == 500
+               && incident.MaxRiskLevel == MailSecurityRiskLevel.Critical,
+            "500 tatsaechlich neue Ablehnungen werden kritisch markiert.");
+    }
+
+    public static async Task PassedOnlyTrafficDoesNotCreateIncidentAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await Process(fixture, Snapshot(T0, 10, 0));
+        var result = await Process(fixture, Snapshot(
+            T0.AddMinutes(5), 20, 0));
+
+        Assert(result.Status == MailSecuritySnapshotChangeStatus.ChangesObserved
+               && result.CreatedIncidents == 0,
+            "Erfolgreicher Mailverkehr allein ist kein Sicherheitsvorfall.");
+
+        await using var db = fixture.Context();
+        Assert(await db.MailSecurityIncidents.CountAsync() == 0
+               && (await db.MailSecurityCheckpointStates.SingleAsync())
+                   .UpdatedAtUtc == T0.AddMinutes(5).UtcDateTime,
+            "Auch ohne neuen Vorfall muss der Checkpoint fortschreiten.");
+    }
+
+    public static async Task HistoryCanBeReadWithoutMutatingItAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await Process(fixture, Snapshot(T0, 10, 30));
+        await Process(fixture, Snapshot(T0.AddMinutes(5), 11, 65));
+
+        await using var db = fixture.Context();
+        var store = new MailSecurityHistoryStore(db);
+        var history = await store.ReadAsync();
+
+        Assert(history.LastProcessedUtc == T0.AddMinutes(5).UtcDateTime
+               && history.Incidents.Count == 1
+               && history.Incidents[0].NewRejected == 35
+               && history.Incidents[0].ClosedAtUtc is null,
+            "Gelesene Historie muss zu den gespeicherten Zaehlern passen.");
+        Assert(await db.MailSecurityIncidents.CountAsync() == 1,
+            "Reiner Lesezugriff darf keine Daten veraendern.");
+    }
+
     private static async Task<MailSecurityHistoryWriteResult> Process(
         Fixture fixture, MailSecurityOverview snapshot)
     {

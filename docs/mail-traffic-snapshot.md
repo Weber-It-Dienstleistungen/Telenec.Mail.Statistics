@@ -146,6 +146,48 @@ Abbrueche. Vierzehn synthetische Python-Regressionstests pruefen
 auch mehrdeutige SASL-Konten im selben Sekundenwert. Die bestehenden Versand- und Empfangsdefinitionen,
 Top-3-Zaehlweise, Snapshot-Struktur und API bleiben unveraendert.
 
+### Abnahme 23.11.2026 und sicherer Deploy-Weg
+
+Der Fix-Kandidat wurde auf Ubuntu isoliert mit **14 erfolgreichen
+Regressionstests** abgenommen. Gegen die echten Mailprotokolle
+(ohne `--write`) wurden folgende Werte beobachtet:
+
+- 206 nach `qmgr` belegte ausgehende Einlieferungen
+- 7.481 erkannte Milter-Ablehnungen
+- 28 streng nachgewiesene SMTPD-DATA-Abbrueche
+- 28 weiterhin ungeklaerte Vorgänge, 0 widerspruechliche
+
+Daraus folgt fuer die Plausibilitaetspruefung
+`28/(206+28)=11,97%`, also unterhalb der **unveraenderten**
+20%-Schutzgrenze. Dies ist bislang noch kein produktiver
+Snapshot-Test.
+
+Ein separater Installationshelfer
+`tools/Deploy-MailTrafficCollector-Fix.sh` ist vorbereitet.
+Er nimmt den zuvor isoliert geladenen und getesteten
+Kandidaten aus
+`/root/telenec-traffic-test/tools/telenec-mail-traffic-collector.py`.
+`--check` laesst die produktive Datei unveraendert und
+startet die 14 Tests erneut. `--apply` sichert die alte
+Version in einem nur fuer root lesbaren Ordner und ersetzt
+**ausschliesslich die Collector-Python-Datei** atomar.
+Dabei wird nur der Traffic-Timer kurz angehalten. Er
+prueft danach per einmaligem Neustart des Traffic-
+Snapshot-Dienstes, ob ein **frischer gueltiger Snapshot**
+entstanden ist. Bei Fehlern wird die vorherige Datei
+automatisch wiederhergestellt und der Timer zurueckgesetzt.
+Plesk, Postfix und die Mail-Security-Unit bleiben unberuehrt.
+
+```bash
+bash -n /root/Deploy-MailTrafficCollector-Fix.sh
+bash /root/Deploy-MailTrafficCollector-Fix.sh --check
+# Nach Sichtpruefung/gesonderter Freigabe:
+bash /root/Deploy-MailTrafficCollector-Fix.sh --apply
+```
+
+Die Installation wurde bei Erstellen dieser Dokumentation
+noch **nicht** durchgefuehrt.
+
 **Regressionsabnahme vor Serveraenderung:**
 
 ```bash

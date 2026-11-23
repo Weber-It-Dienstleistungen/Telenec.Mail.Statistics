@@ -48,6 +48,10 @@ POSTFIX = re.compile(
     r"postfix/(?P<process>[a-z0-9_]+)\[\d+\]:\s+"
     r"(?P<queue>[A-Za-z0-9]+):\s+(?P<details>.*)"
 )
+SMTPD_PID = re.compile(
+    r"postfix/smtpd\[(?P<pid>\d+)\]:\s+(?P<details>.*)"
+)
+DATA_COMMANDS = re.compile(r"(?:^|\s)data=(?P<ok>\d+)/(?P<total>\d+)(?:\s|$)")
 SASL = re.compile(r"(?:^|[,\s])sasl_username=(?P<account>[^,\s]+)")
 TO = re.compile(r"(?:^|[,\s])to=<(?P<account>[^>]*)>")
 STATUS_SENT = re.compile(r"(?:^|[,\s])status=sent(?:[,\s]|$)")
@@ -145,6 +149,83 @@ def hourly_index(time: dt.datetime, start: dt.datetime) -> int:
     return int((time - start).total_seconds() // 3600)
 
 
+def is_strict_data_abort(
+    queue_id: str,
+    accepted_at: dt.datetime,
+    process_ids: set[str],
+    smtpd_sessions: dict[str, set[tuple[dt.datetime, str]]],
+    smtpd_queue_events: dict[str, set[tuple[str, dt.datetime]]],
+    maximum_delay: dt.timedelta,
+) -> bool:
+    """Only classify one-to-one SMTPD sessions with data=0/N as not queued.
+
+    A PID is reused across connections. Require exactly one process,
+    a prior explicit connect, a following explicit disconnect, no
+    intervening connect/disconnect, and exactly ONE queue-tagged client
+    event inside this bounded session. Equal-second boundaries are
+    deliberately ambiguous and therefore excluded.
+    """
+    if len(process_ids) != 1:
+        return False
+
+    pid = next(iter(process_ids))
+    events = smtpd_sessions.get(pid, set())
+    connects = {t for t, kind in events if kind == "connect" and t < accepted_at}
+    if not connects:
+        return False
+    started = max(connects)
+
+    # If the process already closed after that connect and before
+    # our queue line, the connect belongs to another session.
+    if any(
+        started <= t <= accepted_at and kind.startswith("disconnect")
+        for t, kind in events
+    ):
+        return False
+
+    future_connects = {t for t, kind in events if t > accepted_at}
+    next_connect = min(future_connects) if future_connects else None
+
+    endings = {
+        (t, kind)
+        for t, kind in events
+        if t > accepted_at
+        and kind.startswith("disconnect")
+        and (next_connect is None or t < next_connect)
+        and t - accepted_at <= maximum_delay
+    }
+    if len(endings) != 1:
+        return False
+    ended, ending_kind = next(iter(endings))
+    if ending_kind != "disconnect_data_0_of_n":
+        return False
+
+    # Strictly reject a second connect inside the observed session,
+    # a same-second connection boundary, or any other queue message.
+    if any(
+        started < t < ended and kind == "connect"
+        for t, kind in events
+    ):
+        return False
+
+    in_session = {
+        (qid, t) for qid, t in smtpd_queue_events.get(pid, set())
+        if started < t < ended
+    }
+    if in_session != {(queue_id, accepted_at)}:
+        return False
+
+    # Multiple queue-ID events exactly at the boundaries cannot be
+    # ordered from RFC3164 seconds and make the session ambiguous.
+    if any(
+        t in (started, ended)
+        for _qid, t in smtpd_queue_events.get(pid, set())
+    ):
+        return False
+
+    return True
+
+
 def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     # 24 stündliche Balken ab hh:00; der letzte Balken ist laufend
     # und daher noch nicht abgeschlossen.
@@ -160,6 +241,11 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     submissions = collections.defaultdict(set)
     queued = collections.defaultdict(set)
     milter_rejected = collections.defaultdict(set)
+    # SMTPD disconnect lines are not queue-stamped. Keep only process
+    # ID, time and coarse disconnect kind; never retain client IPs.
+    smtpd_sessions = collections.defaultdict(set)
+    smtpd_queue_events = collections.defaultdict(set)
+    submission_processes = collections.defaultdict(set)
     pickups = {}
     deliveries = {}
 
@@ -187,6 +273,26 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
             if at is None or at < context_start or at > observed_until:
                 continue
 
+            smtpd_line = SMTPD_PID.search(line)
+            if smtpd_line:
+                pid = smtpd_line.group("pid")
+                details_for_session = smtpd_line.group("details")
+                if details_for_session.startswith("connect from "):
+                    smtpd_sessions[pid].add((at, "connect"))
+                elif details_for_session.startswith("disconnect from "):
+                    data_counts = DATA_COMMANDS.search(details_for_session)
+                    if data_counts:
+                        ok = int(data_counts.group("ok"))
+                        attempted = int(data_counts.group("total"))
+                        event_kind = (
+                            "disconnect_data_0_of_n"
+                            if ok == 0 and attempted > 0
+                            else "disconnect_other"
+                        )
+                    else:
+                        event_kind = "disconnect_no_data_field"
+                    smtpd_sessions[pid].add((at, event_kind))
+
             match = POSTFIX.search(line)
             if match is None:
                 continue
@@ -198,6 +304,11 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
             qid = match.group("queue")
             process = match.group("process")
             details = match.group("details")
+
+            # Identify *all* SMTPD queue-tagged client events for
+            # session disambiguation, including non-SASL submissions.
+            if process == "smtpd" and smtpd_line and details.startswith("client="):
+                smtpd_queue_events[smtpd_line.group("pid")].add((qid, at))
 
             if process == "smtpd" and "sasl_username=" in details:
                 sasl_events += 1
@@ -214,6 +325,10 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                         account = normalize_account(sasl.group("account"))
                         if account is not None:
                             submissions[qid].add((at, account))
+                            if smtpd_line:
+                                submission_processes[(qid, at, account)].add(
+                                    smtpd_line.group("pid")
+                                )
                             relevant_lines += 1
                 else:
                     sasl_other_events += 1
@@ -268,6 +383,7 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
     confirmed_outgoing = 0
     unconfirmed_submissions = 0
     rejected_submissions = 0
+    strict_aborted_submissions = 0
     conflicting_rejections = 0
     all_submissions_in_window = 0
 
@@ -310,7 +426,20 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
                 continue
 
             if not queued_for_acceptance:
-                unconfirmed_submissions += 1
+                # An unequivocal SMTPD DATA=0/N disconnect on
+                # the SAME exclusive session is *not* a queued
+                # message. Non-provable cases remain unresolved.
+                if is_strict_data_abort(
+                    qid,
+                    at,
+                    submission_processes.get((qid, at, account), set()),
+                    smtpd_sessions,
+                    smtpd_queue_events,
+                    correlation_window,
+                ):
+                    strict_aborted_submissions += 1
+                else:
+                    unconfirmed_submissions += 1
                 continue
 
             index = hourly_index(at, start)
@@ -360,6 +489,7 @@ def analyze(directory: Path, clock: dt.datetime, timezone: ZoneInfo):
         "outgoing": confirmed_outgoing,
         "incoming": confirmed_incoming,
         "unconfirmed_auth": unconfirmed_submissions,
+        "strict_data_aborted_auth": strict_aborted_submissions,
         "milter_rejected_auth": rejected_submissions,
         "conflicting_milter_qmgr": conflicting_rejections,
         "submission_queue_ids": all_submissions_in_window,
@@ -494,6 +624,8 @@ def main() -> int:
               diagnostic["milter_rejected_auth"])
         print("Ungeklaerte SASL-Einlieferungen (ohne qmgr und Reject):",
               diagnostic["unconfirmed_auth"])
+        print("Eindeutige SMTPD-Sitzungen ohne erfolgreiches DATA (keine Einlieferung):",
+              diagnostic["strict_data_aborted_auth"])
         print("Zeitlich widerspruechliche Einlieferungen (qmgr und Milter-Reject):",
               diagnostic["conflicting_milter_qmgr"])
         print("Zeitliches Zuordnungsfenster (Minuten):",

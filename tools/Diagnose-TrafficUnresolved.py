@@ -32,6 +32,38 @@ def timezone():
     return ZoneInfo(target.split(marker, 1)[1])
 
 
+def classify_event(process: str, details: str) -> str:
+    """Only predefined event categories; never retain or print raw details."""
+    if process == "smtpd":
+        if details.startswith("client="):
+            return "smtpd_client"
+        if "milter-reject:" in details:
+            return "smtpd_milter_reject"
+        if "reject:" in details:
+            return "smtpd_reject"
+        if "warning:" in details:
+            return "smtpd_warning"
+        return "smtpd_other"
+    if process == "cleanup":
+        if details.startswith("milter-reject:"):
+            return "cleanup_milter_reject"
+        if details.startswith("message-id="):
+            return "cleanup_message_id"
+        if details.startswith("filter:"):
+            return "cleanup_filter"
+        if details.startswith("hold:"):
+            return "cleanup_hold"
+        if details.startswith("discard:"):
+            return "cleanup_discard"
+        return "cleanup_other"
+    if process == "qmgr":
+        return "qmgr"
+    if process in {"bounce", "defer", "error", "discard",
+                   "smtp", "lmtp", "pipe", "local", "virtual"}:
+        return "other_" + process
+    return "other_process"
+
+
 def main():
     if not COLLECTOR.is_file():
         raise RuntimeError("Installierter Traffic-Collector fehlt.")
@@ -51,6 +83,8 @@ def main():
     milter = collections.defaultdict(set)
     cleanup = collections.defaultdict(list)
     processes = collections.defaultdict(list)
+    # Store only event kinds + times, never raw log lines, names or bodies.
+    lifecycle = collections.defaultdict(list)
     scanned = 0
     files = 0
 
@@ -70,6 +104,7 @@ def main():
             qid = match.group("queue")
             process = match.group("process")
             details = match.group("details")
+            lifecycle[qid].append((at, classify_event(process, details)))
 
             # Bei der Diagnose wird nur die Plausibilitaet
             # des SASL-Wertes geprueft, nicht der Wert gespeichert.
@@ -95,6 +130,7 @@ def main():
 
     reasons = collections.Counter()
     other_processes = collections.Counter()
+    orphan_lifecycle = collections.Counter()
     confirmed_count = rejected_count = unresolved_count = 0
     recent_unresolved = 0
 
@@ -135,6 +171,18 @@ def main():
                 if any(t < at or t >= limit for t in milter.get(qid, ())):
                     reasons["milter_reject_nur_ausserhalb_zeitfenster"] += 1
 
+                # Which *other* events exist for these orphaned IDs?
+                # Each tag is counted at most once per unresolved
+                # acceptance, so counts are comparable to 55.
+                other_kinds = {
+                    kind for t, kind in lifecycle.get(qid, ())
+                    if at <= t < limit and kind != "smtpd_client"
+                }
+                if not other_kinds:
+                    orphan_lifecycle["nur_smtpd_client"] += 1
+                for kind in other_kinds:
+                    orphan_lifecycle[kind] += 1
+
                 for process in {
                     proc for t, proc in processes.get(qid, ())
                     if at <= t < limit
@@ -158,6 +206,11 @@ def main():
         print("Zuordnung:", key, reasons[key])
     for key in sorted(other_processes):
         print("Weiterer Postfix-Prozess im Zeitfenster:", key, other_processes[key])
+    print("=== Weitere Ereignisse derselben Queue-ID (aggregiert) ===")
+    for kind in sorted(orphan_lifecycle):
+        print("Ungeklaerte Vorgaenge mit Ereignistyp:", kind,
+              orphan_lifecycle[kind])
+    print("Event-Typen koennen pro Vorgang mehrfach zutreffen.")
     print("Es wurden keine Snapshot-Dateien geschrieben.")
     return 0
 

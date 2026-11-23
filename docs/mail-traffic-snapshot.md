@@ -129,6 +129,8 @@ Der neue **noch nicht produktiv aktivierte** Collector auf
   SMTPD-Verbindung nachweisbar ist;
 - keine mehrdeutigen Verbindungsgraenzen oder dazwischenliegenden
   Verbindungsabschluesse auftreten;
+- die SASL-Account-Zuordnung einer Queue-ID im selben Zeitsekundenwert
+  eindeutig ist;
 - fuer den betreffenden Versandversuch **weder** eine
   `qmgr`-Bestaetigung **noch** eine erkannte Milter-Ablehnung
   vorliegt.
@@ -140,7 +142,8 @@ angesehen. Alle anderen ungeklaerten Ereignisse
 bleiben ungeklaert; die Schwelle bleibt **unveraendert 20 %**.
 
 Es gibt einen separaten Zaehler fuer die strikt erkannten
-Abbrueche. Die bestehenden Versand- und Empfangsdefinitionen,
+Abbrueche. Vierzehn synthetische Python-Regressionstests pruefen
+auch mehrdeutige SASL-Konten im selben Sekundenwert. Die bestehenden Versand- und Empfangsdefinitionen,
 Top-3-Zaehlweise, Snapshot-Struktur und API bleiben unveraendert.
 
 **Regressionsabnahme vor Serveraenderung:**

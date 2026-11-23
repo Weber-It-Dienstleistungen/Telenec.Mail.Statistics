@@ -21,16 +21,24 @@ SQLite-HistoryStore fuer die transaktionale Aktualisierung.
 - Kein neuer API-Endpunkt und keine GUI-Aenderung.
 
 Der einmalige interne Ausfuehrungspfad ist fuer die Testassembly
-freigegeben, ohne den Timer starten oder Serverkonfiguration
-manipulieren zu muessen.
+freigegeben. Fuer Lebenszyklustests ist intern ein kuerzeres
+Timerintervall einstellbar; der normale Konstruktor behaelt
+unveraendert das 5-Minuten-Intervall.
+
+Die Lebenszyklustests pruefen nur die **Serialisierung innerhalb
+EINER Workerinstanz**, nicht eine spaetere Mehrprozessverteilung
+oder parallele Workerinstanzen.
 
 ## Testumfang
 
-Vier neue synthetische Regressionstests decken ab:
+Sieben synthetische Regressionstests decken ab:
 1. gueltiger erster Snapshot nur als Basislinie;
 2. echte Ablehnungsdifferenzen und idempotente Wiederholung;
 3. fehlende, kaputte und veraltete Quelldateien mit anschliessender Erholung;
-4. Fehler bei SQLite-INSERT, atomarer Rollback und erneuter Versuch.
+4. Fehler bei SQLite-INSERT, atomarer Rollback und erneuter Versuch;
+5. Start/Stop ohne Quelle;
+6. echte zeitgesteuerte Polls, Deduplizierung und kein Poll nach Stop;
+7. langsame Durchlaeufe bleiben im selben Worker strikt seriell.
 
 Nach Pull auf Windows:
 
@@ -39,7 +47,7 @@ dotnet build .\Telenec.Mail.Statistics.slnx -c Release
 dotnet run --project .\Telenec.Mail.Statistics.Tests -c Release --no-build
 ```
 
-Erwartung: **140 Tests erfolgreich, 0 fehlgeschlagen**.
+Erwartung: **143 Tests erfolgreich, 0 fehlgeschlagen**.
 Die vier neuen Tests laufen mit einer eigenen SQLite-In-Memory-Datenbank
 und temporaeren, ausschliesslich synthetischen JSON-Snapshots.
 

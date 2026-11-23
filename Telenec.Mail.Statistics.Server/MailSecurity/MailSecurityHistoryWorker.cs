@@ -19,15 +19,33 @@ public sealed class MailSecurityHistoryWorker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly MailSecuritySnapshotReader _snapshotReader;
     private readonly ILogger<MailSecurityHistoryWorker> _logger;
+    private readonly TimeSpan _pollInterval;
 
     public MailSecurityHistoryWorker(
         IServiceScopeFactory scopeFactory,
         MailSecuritySnapshotReader snapshotReader,
         ILogger<MailSecurityHistoryWorker> logger)
+        : this(scopeFactory, snapshotReader, logger, PollInterval)
     {
+    }
+
+    // Nur fuer deterministische Lebenszyklustests verkuerzt.
+    // Der produktive Konstruktor behaelt fuenf Minuten bei.
+    internal MailSecurityHistoryWorker(
+        IServiceScopeFactory scopeFactory,
+        MailSecuritySnapshotReader snapshotReader,
+        ILogger<MailSecurityHistoryWorker> logger,
+        TimeSpan pollInterval)
+    {
+        if (pollInterval <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pollInterval));
+        }
+
         _scopeFactory = scopeFactory;
         _snapshotReader = snapshotReader;
         _logger = logger;
+        _pollInterval = pollInterval;
     }
 
     protected override async Task ExecuteAsync(
@@ -39,7 +57,7 @@ public sealed class MailSecurityHistoryWorker : BackgroundService
 
         await ProcessSnapshotOnceAsync(stoppingToken);
 
-        using var timer = new PeriodicTimer(PollInterval);
+        using var timer = new PeriodicTimer(_pollInterval);
 
         try
         {

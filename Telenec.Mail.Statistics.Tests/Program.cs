@@ -929,6 +929,12 @@ internal static class Program
             MailSecurityHistoryWorkerTests.UnavailableSourcesPreserveCheckpointAsync);
         await Test("Worker erholt sich nach SQLite-Schreibfehler",
             MailSecurityHistoryWorkerTests.SqliteFailureRollsBackAndCanRetryAsync);
+        await Test("Worker startet und stoppt ohne Snapshot",
+            MailSecurityHistoryWorkerTests.StartStopWithoutSourceAsync);
+        await Test("Worker: Timerpolls und Stop ohne Nachlauf",
+            MailSecurityHistoryWorkerTests.PeriodicProcessingStopsCleanlyAsync);
+        await Test("Worker: langsame Durchlaeufe bleiben seriell",
+            MailSecurityHistoryWorkerTests.SlowPollsNeverOverlapAsync);
 
         Console.WriteLine();
         Console.WriteLine(

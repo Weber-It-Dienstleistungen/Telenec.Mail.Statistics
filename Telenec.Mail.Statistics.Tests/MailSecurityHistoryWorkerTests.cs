@@ -143,6 +143,227 @@ internal static class MailSecurityHistoryWorkerTests
             "Der identische Snapshot muss nach Fehlerbehebung exakt einmal buchbar sein.");
     }
 
+    public static async Task StartStopWithoutSourceAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        using var worker = fixture.CreateWorker(TimeSpan.FromMilliseconds(25));
+
+        await worker.StartAsync(CancellationToken.None);
+        await Task.Delay(120);
+
+        using var stopTimeout = new CancellationTokenSource(
+            TimeSpan.FromSeconds(5));
+        await worker.StopAsync(stopTimeout.Token);
+
+        Assert(worker.ExecuteTask is { IsCompletedSuccessfully: true },
+            "StopAsync muss einen auf den Timer wartenden Worker beenden.");
+
+        await using var db = fixture.Context();
+        Assert(await db.MailSecurityCheckpointStates.CountAsync() == 0
+               && await db.MailSecurityIncidents.CountAsync() == 0,
+            "Ohne gueltige Datenquelle darf der Host-Lebenszyklus nichts speichern.");
+    }
+
+    public static async Task PeriodicProcessingStopsCleanlyAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var timestamp = DateTimeOffset.UtcNow.AddMinutes(-3);
+        await fixture.WriteSnapshotAsync(timestamp, 10, 30);
+
+        var observed = new ObservedScopeFactory(fixture.ScopeFactory);
+        using var worker = fixture.CreateWorker(
+            TimeSpan.FromMilliseconds(40), observed);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(
+                () => observed.CompletedCycles >= 1,
+                "Der erste Hintergrundpoll wurde nicht beendet.");
+
+            await fixture.WriteSnapshotAsync(
+                timestamp.AddMinutes(1), 12, 70);
+            await WaitUntilAsync(
+                () => observed.CompletedCycles >= 4,
+                "Der Timer hat keine weiteren Polls verarbeitet.");
+        }
+        finally
+        {
+            using var stopTimeout = new CancellationTokenSource(
+                TimeSpan.FromSeconds(5));
+            await worker.StopAsync(stopTimeout.Token);
+        }
+
+        Assert(worker.ExecuteTask is { IsCompletedSuccessfully: true },
+            "Nach StopAsync darf die Hintergrundaufgabe nicht weiterlaufen.");
+
+        await using (var db = fixture.Context())
+        {
+            Assert((await db.MailSecurityIncidents.SingleAsync()).NewRejected == 40,
+                "Wiederholte Timerpolls duerfen echte Deltas nur einmal zaehlen.");
+            Assert((await db.MailSecurityCheckpointStates.SingleAsync())
+                       .UpdatedAtUtc == timestamp.AddMinutes(1).UtcDateTime,
+                "Der Hintergrundworker muss den letzten Snapshot speichern.");
+        }
+
+        var countAfterStop = observed.CompletedCycles;
+        await fixture.WriteSnapshotAsync(
+            timestamp.AddMinutes(2), 14, 100);
+        await Task.Delay(160);
+        Assert(observed.CompletedCycles == countAfterStop,
+            "Nach StopAsync darf kein weiterer Poll laufen.");
+
+        await using var verify = fixture.Context();
+        Assert((await verify.MailSecurityIncidents.SingleAsync()).NewRejected == 40,
+            "Ein neuer Snapshot nach Stop darf nicht verarbeitet werden.");
+    }
+
+    public static async Task SlowPollsNeverOverlapAsync()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var timestamp = DateTimeOffset.UtcNow.AddMinutes(-3);
+        await fixture.WriteSnapshotAsync(timestamp, 10, 30);
+
+        // Die Scope-Freigabe ist absichtlich laenger als das Timerintervall.
+        // Dadurch wuerde paralleles Scheduling als ActiveScopes > 1 auffallen.
+        var observed = new ObservedScopeFactory(
+            fixture.ScopeFactory, TimeSpan.FromMilliseconds(90));
+        using var worker = fixture.CreateWorker(
+            TimeSpan.FromMilliseconds(15), observed);
+
+        await worker.StartAsync(CancellationToken.None);
+        try
+        {
+            await WaitUntilAsync(
+                () => observed.CompletedCycles >= 3,
+                "Drei verlangsamte Hintergrundpolls wurden nicht beendet.");
+        }
+        finally
+        {
+            using var stopTimeout = new CancellationTokenSource(
+                TimeSpan.FromSeconds(5));
+            await worker.StopAsync(stopTimeout.Token);
+        }
+
+        Assert(observed.PeakConcurrentScopes == 1,
+            "Ein Worker darf nicht mehrere DB-Scopes parallel verarbeiten.");
+        Assert(observed.CompletedCycles >= 3,
+            "Die Hintergrundschleife muss wiederholt gearbeitet haben.");
+
+        await using var db = fixture.Context();
+        Assert(await db.MailSecurityIncidents.CountAsync() == 0,
+            "Wiederholte gleiche Snapshots duerfen keine Vorfaelle erfinden.");
+    }
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition, string failureMessage)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(6);
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new InvalidOperationException(failureMessage);
+            }
+
+            await Task.Delay(20);
+        }
+    }
+
+    private sealed class ObservedScopeFactory : IServiceScopeFactory
+    {
+        private readonly IServiceScopeFactory _inner;
+        private readonly TimeSpan _disposeDelay;
+        private int _active;
+        private int _peak;
+        private int _completed;
+
+        public ObservedScopeFactory(
+            IServiceScopeFactory inner, TimeSpan disposeDelay = default)
+        {
+            _inner = inner;
+            _disposeDelay = disposeDelay;
+        }
+
+        public int CompletedCycles => Volatile.Read(ref _completed);
+        public int PeakConcurrentScopes => Volatile.Read(ref _peak);
+
+        public IServiceScope CreateScope()
+        {
+            var scope = _inner.CreateScope();
+            var active = Interlocked.Increment(ref _active);
+            while (true)
+            {
+                var peak = Volatile.Read(ref _peak);
+                if (active <= peak
+                    || Interlocked.CompareExchange(
+                        ref _peak, active, peak) == peak)
+                {
+                    break;
+                }
+            }
+
+            return new ObservedScope(scope, this);
+        }
+
+        private void Completed()
+        {
+            Interlocked.Decrement(ref _active);
+            Interlocked.Increment(ref _completed);
+        }
+
+        private sealed class ObservedScope : IServiceScope, IAsyncDisposable
+        {
+            private readonly IServiceScope _inner;
+            private readonly ObservedScopeFactory _owner;
+
+            public ObservedScope(
+                IServiceScope inner, ObservedScopeFactory owner)
+            {
+                _inner = inner;
+                _owner = owner;
+            }
+
+            public IServiceProvider ServiceProvider => _inner.ServiceProvider;
+
+            public void Dispose()
+            {
+                try
+                {
+                    _inner.Dispose();
+                }
+                finally
+                {
+                    _owner.Completed();
+                }
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                try
+                {
+                    if (_owner._disposeDelay > TimeSpan.Zero)
+                    {
+                        await Task.Delay(_owner._disposeDelay);
+                    }
+
+                    if (_inner is IAsyncDisposable asyncDisposable)
+                    {
+                        await asyncDisposable.DisposeAsync();
+                    }
+                    else
+                    {
+                        _inner.Dispose();
+                    }
+                }
+                finally
+                {
+                    _owner.Completed();
+                }
+            }
+        }
+    }
+
     private static void Assert(bool condition, string message)
     {
         if (!condition)
@@ -159,6 +380,8 @@ internal static class MailSecurityHistoryWorkerTests
         private readonly MailSecuritySnapshotReader _reader;
 
         public string SnapshotPath { get; }
+        public IServiceScopeFactory ScopeFactory =>
+            _services.GetRequiredService<IServiceScopeFactory>();
 
         private Fixture(SqliteConnection connection, ServiceProvider services,
             DbContextOptions<StatisticsDbContext> options, string path)
@@ -200,11 +423,19 @@ internal static class MailSecurityHistoryWorkerTests
 
         public StatisticsDbContext Context() => new(_options);
 
-        public MailSecurityHistoryWorker CreateWorker() =>
-            new(
-                _services.GetRequiredService<IServiceScopeFactory>(),
-                _reader,
-                NullLogger<MailSecurityHistoryWorker>.Instance);
+        public MailSecurityHistoryWorker CreateWorker(
+            TimeSpan? pollInterval = null,
+            IServiceScopeFactory? scopeFactory = null)
+        {
+            var factory = scopeFactory ?? ScopeFactory;
+            var logger = NullLogger<MailSecurityHistoryWorker>.Instance;
+
+            return pollInterval is { } interval
+                ? new MailSecurityHistoryWorker(
+                    factory, _reader, logger, interval)
+                : new MailSecurityHistoryWorker(
+                    factory, _reader, logger);
+        }
 
         public async Task WriteSnapshotAsync(
             DateTimeOffset timestamp, int passed, int rejected)

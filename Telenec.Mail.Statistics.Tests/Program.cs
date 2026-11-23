@@ -938,6 +938,25 @@ internal static class Program
         await Test("Worker: langsame Durchlaeufe bleiben seriell",
             MailSecurityHistoryWorkerTests.SlowPollsNeverOverlapAsync);
 
+        // ================================================
+        // Sprint 43.4e - Explizite Worker-Aktivierung
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4e (Opt-in)");
+        Console.WriteLine();
+
+        await Test("Worker-Flag fehlt: standardmaessig aus",
+            MailSecurityHistoryWorkerRegistrationTests.AbsentFlagKeepsWorkerDisabledAsync);
+        await Test("Worker-Flag false: keine Registrierung",
+            MailSecurityHistoryWorkerRegistrationTests.FalseFlagKeepsWorkerDisabledAsync);
+        await Test("Worker-Flag true: einmalige Registrierung",
+            MailSecurityHistoryWorkerRegistrationTests.TrueWithSnapshotRegistersOnceAsync);
+        await Test("Worker-Flag true ohne Quelle: Abbruch",
+            MailSecurityHistoryWorkerRegistrationTests.TrueWithoutSnapshotFailsClosedAsync);
+        await Test("Worker-Flag ungueltig: Abbruch",
+            MailSecurityHistoryWorkerRegistrationTests.InvalidFlagsFailClosedAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

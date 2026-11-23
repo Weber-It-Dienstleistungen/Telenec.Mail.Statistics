@@ -150,6 +150,18 @@ builder.Services.AddHostedService<
 builder.Services.AddHostedService<
     StatisticsRetentionHostedService>();
 
+/*
+ * Mail-Security-Historie: explizites Opt-in.
+ *
+ * Ohne MailSecurity:EnableHistoryWorker=true wird der Worker
+ * NICHT als Hosted Service registriert. Damit bleiben
+ * bestehende Serverinstallationen standardmaessig unveraendert.
+ * Ein aktivierter Worker schreibt ausschliesslich
+ * Checkpoints und aggregierte Vorfaelle in SQLite.
+ */
+builder.Services.AddMailSecurityHistoryWorkerIfEnabled(
+    builder.Configuration);
+
 builder.Services.AddRateLimiter(
     options =>
     {

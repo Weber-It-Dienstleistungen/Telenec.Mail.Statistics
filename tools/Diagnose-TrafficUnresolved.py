@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections
 import datetime as dt
+import re
 from pathlib import Path
 import runpy
 import sys
@@ -78,6 +79,15 @@ def main():
     qmanager_pattern = api["QMANAGER"]
 
     accepted = collections.defaultdict(set)
+    # The original productive parser does not retain smtpd PID.
+    # Diagnostic-only: compare queue-stamped smtpd lines with
+    # unkeyed connection events from the same process, within
+    # the short observation window.
+    accepted_processes = collections.defaultdict(set)
+    connection_events = collections.defaultdict(list)
+    smtpd_pattern = re.compile(
+        r"postfix/smtpd\[(?P<pid>\d+)\]:\s+(?P<details>.*)"
+    )
     confirmed = collections.defaultdict(set)
     all_qmgr = collections.defaultdict(list)
     milter = collections.defaultdict(set)
@@ -96,6 +106,36 @@ def main():
             at = api["read_timestamp"](line, now, tz)
             if at is None or at < context_start or at > now:
                 continue
+
+            smtpd_match = smtpd_pattern.search(line)
+            if smtpd_match:
+                pid = smtpd_match.group("pid")
+                text = smtpd_match.group("details")
+                # Preserve only a coarse event type, NEVER the
+                # address, user, IP, payload or raw disconnect line.
+                kind = None
+                if text.startswith("connect from "):
+                    kind = "connect"
+                elif text.startswith("disconnect from "):
+                    data = re.search(r"(?:^|\s)data=(\d+)/(\d+)(?:\s|$)", text)
+                    if data:
+                        sent, attempted = map(int, data.groups())
+                        kind = ("disconnect_data_used" if sent > 0 else
+                                "disconnect_data_failed" if attempted > 0 else
+                                "disconnect_no_data_attempt")
+                    else:
+                        kind = "disconnect_no_data_count"
+                elif text.startswith("lost connection after "):
+                    kind = "lost_connection"
+                elif text.startswith("timeout after "):
+                    kind = "timeout"
+                elif "NOQUEUE: reject:" in text:
+                    kind = "noqueue_reject"
+                elif "milter-reject:" in text:
+                    kind = "milter_reject"
+                if kind:
+                    connection_events[pid].append((at, kind))
+
             match = post.search(line)
             if match is None:
                 continue
@@ -114,6 +154,10 @@ def main():
                 sasl = api["SASL"].search(details)
                 if sasl and api["normalize_account"](sasl.group("account")):
                     accepted[qid].add(at)
+                    if smtpd_match:
+                        accepted_processes[(qid, at)].add(
+                            smtpd_match.group("pid")
+                        )
 
             if process == "qmgr":
                 is_confirmed = bool(qmanager_pattern.search(details))
@@ -131,6 +175,7 @@ def main():
     reasons = collections.Counter()
     other_processes = collections.Counter()
     orphan_lifecycle = collections.Counter()
+    smtpd_endings = collections.Counter()
     confirmed_count = rejected_count = unresolved_count = 0
     recent_unresolved = 0
 
@@ -183,6 +228,27 @@ def main():
                 for kind in other_kinds:
                     orphan_lifecycle[kind] += 1
 
+                # Connection-wide messages have NO queue ID.
+                # Time/PID are hints only: a reused smtpd process
+                # may have handled several distinct connections.
+                # End at the next known connection start to avoid
+                # attributing a later client's disconnect.
+                hints = set()
+                for pid in accepted_processes.get((qid, at), ()):
+                    later_connect = [
+                        t for t, kind in connection_events.get(pid, ())
+                        if at < t <= limit and kind == "connect"
+                    ]
+                    close = min([limit, *later_connect])
+                    hints.update(
+                        kind for t, kind in connection_events.get(pid, ())
+                        if at <= t <= close and kind != "connect"
+                    )
+                if not hints:
+                    smtpd_endings["kein_zuordenbares_smtpd_ende"] += 1
+                for kind in hints:
+                    smtpd_endings[kind] += 1
+
                 for process in {
                     proc for t, proc in processes.get(qid, ())
                     if at <= t < limit
@@ -211,6 +277,11 @@ def main():
         print("Ungeklaerte Vorgaenge mit Ereignistyp:", kind,
               orphan_lifecycle[kind])
     print("Event-Typen koennen pro Vorgang mehrfach zutreffen.")
+    print("=== SMTPD-Verbindungsabschluesse derselben Prozesse ===")
+    print("Nur Hinweise ueber PID/Zeit, keine verifizierte Queue-Zuordnung.")
+    for kind in sorted(smtpd_endings):
+        print("Ungeklaerte Vorgaenge mit SMTPD-Hinweis:", kind,
+              smtpd_endings[kind])
     print("Es wurden keine Snapshot-Dateien geschrieben.")
     return 0
 

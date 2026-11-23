@@ -42,8 +42,7 @@ public static class MailSecuritySchemaMigrationPolicy
         // erfordern eine bewusste Aktualisierung dieser Freigabepolitik.
         // So darf ein zukuenftiger Code-Stand nicht stillschweigend
         // weitere Schemata installieren.
-        var available = (await database.Database.GetMigrationsAsync(
-            cancellationToken)).ToArray();
+        var available = database.Database.GetMigrations().ToArray();
 
         if (!available.SequenceEqual(
                 new[] { InitialMigration, HistoryMigration },

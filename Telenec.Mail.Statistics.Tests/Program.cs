@@ -980,6 +980,19 @@ internal static class Program
         await Test("Ungueltiges Schemaflag fuehrt keine Migration aus",
             MailSecuritySchemaMigrationTests.InvalidApprovalFlagDoesNotMigrateAsync);
 
+        // ================================================
+        // Sprint 43.4g - Dateibasierte Upgrade-/Restore-Probe
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4g (Datei-Backup/Restore)");
+        Console.WriteLine();
+
+        await Test("Online-Backup, isoliertes Upgrade und Restore",
+            MailSecurityFileUpgradeTests.BackupUpgradeAndIsolatedRestoreAsync);
+        await Test("Unbekannter Migrationsstand: kein Schreibzugriff",
+            MailSecurityFileUpgradeTests.UnknownMigrationFailsWithoutChangingFileAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");

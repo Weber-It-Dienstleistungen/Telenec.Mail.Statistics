@@ -1,5 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Telenec.Mail.Statistics.Server.Data;
+﻿using Telenec.Mail.Statistics.Server.Data;
+using Telenec.Mail.Statistics.Server.MailSecurity;
 using Telenec.Mail.Statistics.Server.Security;
 
 namespace Telenec.Mail.Statistics.Server.Services;
@@ -10,16 +10,19 @@ public sealed class ServerInitializationHostedService : IHostedService
     private readonly IInstallationKeyService _installationKeyService;
     private readonly IAdminApiKeyValidator _adminApiKeyValidator;
     private readonly ILogger<ServerInitializationHostedService> _logger;
+    private readonly IConfiguration _configuration;
 
     public ServerInitializationHostedService(
         IServiceScopeFactory scopeFactory,
         IInstallationKeyService installationKeyService,
         IAdminApiKeyValidator adminApiKeyValidator,
+        IConfiguration configuration,
         ILogger<ServerInitializationHostedService> logger)
     {
         _scopeFactory = scopeFactory;
         _installationKeyService = installationKeyService;
         _adminApiKeyValidator = adminApiKeyValidator;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -29,17 +32,18 @@ public sealed class ServerInitializationHostedService : IHostedService
         _ = _adminApiKeyValidator;
 
         _logger.LogInformation(
-            "Initialisiere Statistikdatenbank und wende ausstehende Migrationen an.");
+            "Initialisiere Statistikdatenbank mit ausdruecklicher Migrationsfreigabe.");
 
         await using var scope = _scopeFactory.CreateAsyncScope();
 
         var dbContext =
             scope.ServiceProvider.GetRequiredService<StatisticsDbContext>();
 
-        await dbContext.Database.MigrateAsync(cancellationToken);
+        await MailSecuritySchemaMigrationPolicy.MigrateAsync(
+            dbContext, _configuration, cancellationToken);
 
         _logger.LogInformation(
-            "Statistikdatenbank wurde erfolgreich initialisiert.");
+            "Statistikdatenbank wurde gemaess Migrationsfreigabe initialisiert.");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

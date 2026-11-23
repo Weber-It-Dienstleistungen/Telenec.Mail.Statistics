@@ -957,6 +957,29 @@ internal static class Program
         await Test("Worker-Flag ungueltig: Abbruch",
             MailSecurityHistoryWorkerRegistrationTests.InvalidFlagsFailClosedAsync);
 
+        // ================================================
+        // Sprint 43.4f - Freigabe fuer accountbezogene Migration
+        // ================================================
+
+        Console.WriteLine();
+        Console.WriteLine("Mail-Sicherheit – Sprint 43.4f (Schema-Freigabe)");
+        Console.WriteLine();
+
+        await Test("Ohne Schemafreigabe nur Installationsdatenbank",
+            MailSecuritySchemaMigrationTests.FreshDatabaseWithoutPermissionOnlyCreatesInstallationsAsync);
+        await Test("Bestehende Installationen ohne Schemafreigabe unveraendert",
+            MailSecuritySchemaMigrationTests.ExistingInstallationsRemainWithFlagOffAsync);
+        await Test("Schemafreigabe migriert additiv ohne Datenverlust",
+            MailSecuritySchemaMigrationTests.ApprovedMigrationPreservesExistingInstallationsAsync);
+        await Test("Schemafreigabe zuruecknehmen fuehrt kein Down aus",
+            MailSecuritySchemaMigrationTests.DisabledAfterApprovalNeverRollsBackAsync);
+        await Test("Worker ohne Schemafreigabe startet nicht",
+            MailSecuritySchemaMigrationTests.WorkerCannotStartWithoutUnapprovedSchemaAsync);
+        await Test("Worker kann zuvor freigegebenes Schema nutzen",
+            MailSecuritySchemaMigrationTests.WorkerMayUseAlreadyApprovedSchemaAsync);
+        await Test("Ungueltiges Schemaflag fuehrt keine Migration aus",
+            MailSecuritySchemaMigrationTests.InvalidApprovalFlagDoesNotMigrateAsync);
+
         Console.WriteLine();
         Console.WriteLine(
             $"Ergebnis: {passed} erfolgreich, {failed} fehlgeschlagen.");
